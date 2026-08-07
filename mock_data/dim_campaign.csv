@@ -1,0 +1,5 @@
+campaign_id,campaign_name,country,site,product_id,product_name,campaign_start_date,campaign_end_date
+CMP001,Xiaomi 17 Pro Launch,Germany,DE,PRD17P,Xiaomi 17 Pro,2026-08-01,2026-08-31
+CMP002,Back-to-School Campaign,Germany,DE,PRD17P,Xiaomi 17 Pro,2026-08-05,2026-08-25
+CMP003,Mi Fan Campaign,Germany,DE,PRD17P,Xiaomi 17 Pro,2026-08-10,2026-08-20
+CMP101,Xiaomi 17 Pro Launch,France,FR,PRD17P,Xiaomi 17 Pro,2026-08-01,2026-08-31

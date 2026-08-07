@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reservation Analytics AI Agent</title>
+<style>
+:root{--bg:#fafaf9;--card:#fff;--ink:#183244;--muted:#64748b;--line:#d8e0e6;--blue:#245f85;--blue2:#3f98c5;--soft:#eef6fa;--amber:#f4b942}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;color:var(--ink)}
+.wrap{max-width:1180px;margin:auto;padding:20px}.hero{background:linear-gradient(135deg,#173f5f,#245f85,#3f98c5);color:white;border-radius:16px;padding:24px}
+.hero h1{margin:0 0 8px;font-size:30px}.hero p{margin:5px 0;color:#e9f3f8}
+.tabs{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin:14px 0}.tab{border:1px solid var(--line);background:white;border-radius:10px;padding:9px;font-weight:700;cursor:pointer;color:#31546a}.tab.active{background:#173f5f;color:white}
+.panel{display:none}.panel.active{display:block}.card{background:white;border:1px solid var(--line);border-radius:12px;padding:16px;margin:10px 0;box-shadow:0 2px 8px rgba(24,50,68,.04)}
+h2{font-size:20px;margin:16px 0 8px}h3{font-size:15px;margin:5px 0 9px}.muted{color:var(--muted)}
+.arch{display:flex;gap:8px;align-items:center;overflow:auto;padding:16px 6px}.node{min-width:150px;border:1px solid #bdd0dc;background:#f8fbfd;border-radius:10px;padding:12px;text-align:center;position:relative}.node b{display:block}.arrow{font-size:22px;color:#7d97a8}.router{border-color:#6d94ac;background:#eef6fa}.knowledge{border-top:4px solid #4f83a5}.analytics{border-top:4px solid #8e70b2}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:12px}.flow{display:grid;gap:7px;justify-items:center}.flow .node{width:min(620px,100%)}.branch{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%}
+code,pre{font-family:"SFMono-Regular",Consolas,monospace}pre{background:#142632;color:#eef5f8;border-radius:10px;padding:14px;overflow:auto;font-size:12px;line-height:1.5}
+.listen{width:25px;height:25px;border-radius:50%;border:1px solid #b8ccd8;background:#f6fafc;display:inline-grid;place-items:center;cursor:pointer;font-size:11px;vertical-align:middle;margin-left:6px}.listen.speaking{background:#245f85;color:white}
+.qa{border-left:4px solid #3f98c5}.pill{display:inline-block;padding:3px 8px;background:#eef6fa;border-radius:999px;font-size:11px;color:#245f85;font-weight:700}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid var(--line);padding:8px;vertical-align:top}th{background:#eef5f8;text-align:left}
+@media(max-width:850px){.tabs{grid-template-columns:repeat(2,1fr)}.split,.branch{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<section class="hero">
+<h1>Reservation Analytics AI Agent</h1>
+<p>AI layer added on top of the existing AWS Reservation Analytics DM.</p>
+<p><b>Core principle:</b> RAG is for knowledge. SQL is for data.</p>
+</section>
+
+<div class="tabs">
+<button class="tab active" data-tab="arch">Architecture</button>
+<button class="tab" data-tab="flow">Flow</button>
+<button class="tab" data-tab="llama">LlamaIndex</button>
+<button class="tab" data-tab="graph">LangGraph + Athena</button>
+<button class="tab" data-tab="run">Run It</button>
+<button class="tab" data-tab="project">Project</button>
+</div>
+
+<section id="arch" class="panel active">
+<div class="card">
+<h2>End-to-End Architecture <button class="listen" data-speak="End-to-End Architecture">🔊</button></h2>
+<div class="arch">
+<div class="node"><b>Operations User</b><span class="muted">internal user</span></div><div class="arrow">→</div>
+<div class="node"><b>Feishu Bot</b><span class="muted">integration boundary</span></div><div class="arrow">→</div>
+<div class="node"><b>FastAPI</b><span class="muted">backend service</span></div><div class="arrow">→</div>
+<div class="node"><b>Extract + Validate</b><span class="muted">country · product · campaign</span></div><div class="arrow">→</div>
+<div class="node router"><b>LangGraph</b><span class="muted">router / workflow</span></div>
+</div>
+<div class="split">
+<div class="card knowledge"><h3>Knowledge Path <button class="listen" data-speak="Knowledge Path. LlamaIndex retrieves business definitions, metric definitions, data mart metadata, and campaign rules.">🔊</button></h3><p>LlamaIndex → <code>reservation_analytics.md</code></p><p class="muted">Answers: “What does this mean?”</p></div>
+<div class="card analytics"><h3>Analytics Path <button class="listen" data-speak="Analytics Path. The campaign resolver finds one campaign ID, and the analytics tool queries Athena and the existing reservation data mart.">🔊</button></h3><p>Campaign Resolver → Athena → Existing DM</p><p class="muted">Answers: “What is the actual number?”</p></div>
+</div>
+</div>
+<div class="card">
+<h3>Existing Data Engineering Boundary</h3>
+<pre>Reservation + Order + Dimensions
+        ↓
+S3 ODS
+        ↓
+Glue ETL
+        ↓
+DWD + DIM
+        ↓
+Reservation Analytics DM
+        ↓
+Glue Catalog
+        ↓
+Athena
+        ↓
+AI Agent Layer</pre>
+<p><span class="pill">Grain</span> User × Campaign × Product × Site</p>
+<p><span class="pill">Scope</span> Reservation → Order. No Payment dataset.</p>
+</div>
+</section>
+
+<section id="flow" class="panel">
+<div class="card">
+<h2>Request Flow</h2>
+<div class="flow">
+<div class="node"><b>Natural Language Question</b></div><div class="arrow">↓</div>
+<div class="node"><b>Pydantic Structured Output</b><span class="muted">Country · Product · Campaign · Metric</span></div><div class="arrow">↓</div>
+<div class="node"><b>Validation</b><span class="muted">Do not guess missing context</span></div><div class="arrow">↓</div>
+<div class="node router"><b>LangGraph Router</b></div>
+<div class="branch">
+<div class="node knowledge"><b>Knowledge</b><span class="muted">LlamaIndex RAG</span></div>
+<div class="node analytics"><b>Analytics</b><span class="muted">Campaign Resolution → Athena</span></div>
+</div>
+</div>
+</div>
+<div class="card">
+<h3>Campaign Resolution</h3>
+<pre>Country + Product + Campaign Description
+              ↓
+         dim_campaign
+              ↓
+      Unique campaign_id?
+       ↙       ↓       ↘
+     none    unique    multiple
+       ↓       ↓          ↓
+  No match   Athena    Ask user</pre>
+</div>
+</section>
+
+<section id="llama" class="panel">
+<div class="card">
+<h2>LlamaIndex Knowledge Layer</h2>
+<pre>knowledge/reservation_analytics.md
+        ↓
+SimpleDirectoryReader
+        ↓
+Documents / Nodes
+        ↓
+VectorStoreIndex
+        ↓
+Query Engine
+        ↓
+Grounded Business Answer</pre>
+<table>
+<tr><th>Question</th><th>Route</th></tr>
+<tr><td>What does reserved-but-not-ordered mean?</td><td>LlamaIndex</td></tr>
+<tr><td>How is conversion rate calculated?</td><td>LlamaIndex</td></tr>
+<tr><td>What is the DM grain?</td><td>LlamaIndex</td></tr>
+</table>
+</div>
+<div class="card">
+<h3>LangChain + FAISS vs LlamaIndex <button class="listen" data-speak="In my previous LangChain demo, I built the RAG pipeline more explicitly with loaders, chunking, embeddings, and FAISS. Here I use LlamaIndex as a higher-level business knowledge retrieval layer.">🔊</button></h3>
+<p>Previous demo: explicit loader → splitter → embeddings → FAISS → tool.</p>
+<p>This project: LlamaIndex provides a higher-level ingestion, indexing, retrieval, and knowledge-querying layer.</p>
+</div>
+</section>
+
+<section id="graph" class="panel">
+<div class="card">
+<h2>LangGraph Workflow</h2>
+<pre>START
+  ↓
+Extract
+  ├── Knowledge → LlamaIndex → END
+  │
+  └── Analytics
+          ↓
+       Validate
+          ├── Missing → Clarify → END
+          ↓
+   Resolve Campaign
+      ├── None → No Match → END
+      ├── Multiple → Clarify → END
+      └── Unique
+           ↓
+        Athena
+           ↓
+          END</pre>
+</div>
+<div class="card">
+<h3>Analytics Safety</h3>
+<p>The LLM does not write arbitrary SQL. It extracts business context. The application validates that context, resolves one campaign ID, and then executes controlled SQL templates.</p>
+</div>
+</section>
+
+<section id="run" class="panel">
+<div class="card">
+<h2>Run Locally — Mock Mode</h2>
+<pre>cd AWS-Reservation-Analytics-AI-Agent-26
+python scripts/run_demo.py
+python -m unittest discover -s tests -v</pre>
+<p>Mock mode needs no AWS account and no OpenAI API key.</p>
+</div>
+<div class="card">
+<h3>Run FastAPI</h3>
+<pre>pip install -r requirements.txt
+cp .env.example .env
+uvicorn app.main:app --reload --port 8000</pre>
+</div>
+<div class="card">
+<h3>Example</h3>
+<pre>POST /chat
+
+{
+  "session_id": "ops-001",
+  "message": "Analyze the Xiaomi 17 Pro campaign in Germany in August 2026."
+}</pre>
+<p>The mock dimension returns CMP001, CMP002, and CMP003, so the agent asks the user to choose.</p>
+</div>
+</section>
+
+<section id="project" class="panel">
+<div class="card qa">
+<h2>30-second Answer <button class="listen" data-speak="I built a reservation analytics data mart on AWS using S3, Glue, the Glue Data Catalog, and Athena. The data mart combines reservation and order data at the user, campaign, product, and site grain. On top of that data mart, I built a small AI prototype for operations users. I used LlamaIndex for business and metric knowledge retrieval, while actual analytical questions were handled by an Athena analytics tool. LangGraph routed the request, and I validated country, product, and campaign before querying data. If a campaign was ambiguous, the agent asked the user to clarify instead of guessing.">🔊</button></h2>
+<p>I built a reservation analytics data mart on AWS using S3, Glue, the Glue Data Catalog, and Athena. The data mart combines reservation and order data at the user, campaign, product, and site grain. On top of that data mart, I built a small AI prototype for operations users. I used LlamaIndex for business and metric knowledge retrieval, while actual analytical questions were handled by an Athena analytics tool. LangGraph routed the request, and I validated country, product, and campaign before querying data. If a campaign was ambiguous, the agent asked the user to clarify instead of guessing.</p>
+</div>
+<div class="card qa"><h3>Why LlamaIndex?</h3><p>It is the business knowledge layer for approved definitions, metrics, metadata, and campaign rules.</p></div>
+<div class="card qa"><h3>Why Athena instead of RAG for numbers?</h3><p>Counts and conversion rates must come from the actual Data Mart, not vector similarity retrieval.</p></div>
+<div class="card qa"><h3>Why campaign_id?</h3><p>Campaign names and month descriptions may be ambiguous. The resolver produces one governed analytical key before the DM query runs.</p></div>
+<div class="card qa"><h3>What did you own?</h3><p>I designed and developed the Data Mart and backend agent service. Another engineer handled deployment and Feishu integration.</p></div>
+</section>
+</div>
+
+<script>
+const tabs=[...document.querySelectorAll('.tab')], panels=[...document.querySelectorAll('.panel')];
+tabs.forEach(t=>t.addEventListener('click',()=>{tabs.forEach(x=>x.classList.remove('active'));panels.forEach(x=>x.classList.remove('active'));t.classList.add('active');document.getElementById(t.dataset.tab).classList.add('active')}));
+let voices=[],preferred=null;
+function loadVoices(){voices=speechSynthesis.getVoices();preferred=voices.find(v=>v.name==='Google UK English Female')||voices.find(v=>/en-GB/i.test(v.lang)&&/female|susan|serena|kate|samantha/i.test(v.name))||voices.find(v=>/en-GB/i.test(v.lang))||voices.find(v=>/^en/i.test(v.lang))}
+loadVoices();speechSynthesis.onvoiceschanged=loadVoices;
+document.addEventListener('click',e=>{const b=e.target.closest('.listen');if(!b)return;speechSynthesis.cancel();document.querySelectorAll('.listen').forEach(x=>x.classList.remove('speaking'));const u=new SpeechSynthesisUtterance(b.dataset.speak||b.parentElement.innerText.replace('🔊',''));if(preferred)u.voice=preferred;u.rate=.9;b.classList.add('speaking');u.onend=()=>b.classList.remove('speaking');speechSynthesis.speak(u)});
+</script>
+</body>
+</html>

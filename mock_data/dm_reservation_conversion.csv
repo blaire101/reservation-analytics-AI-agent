@@ -1,0 +1,12 @@
+reservation_id,user_id,campaign_id,product_id,site,reserve_time,channel,reserve_flag,order_flag,tag_reserved_not_paid,conversion_segment,order_id,order_time
+R001,U001,CMP001,PRD17P,DE,2026-08-01 10:00:00,seo,1,1,0,ordered,O001,2026-08-02 11:00:00
+R002,U002,CMP001,PRD17P,DE,2026-08-02 10:00:00,direct,1,1,0,ordered,O002,2026-08-03 12:00:00
+R003,U003,CMP001,PRD17P,DE,2026-08-03 10:00:00,paid,1,1,0,ordered,O003,2026-08-04 13:00:00
+R004,U004,CMP001,PRD17P,DE,2026-08-04 10:00:00,email,1,1,0,ordered,O004,2026-08-05 14:00:00
+R005,U005,CMP001,PRD17P,DE,2026-08-05 10:00:00,social,1,1,0,ordered,O005,2026-08-06 15:00:00
+R006,U006,CMP001,PRD17P,DE,2026-08-06 10:00:00,direct,1,0,1,reserved_not_ordered,,
+R007,U007,CMP001,PRD17P,DE,2026-08-07 10:00:00,seo,1,0,1,reserved_not_ordered,,
+R008,U008,CMP001,PRD17P,DE,2026-08-08 10:00:00,paid,1,0,1,reserved_not_ordered,,
+R201,U021,CMP002,PRD17P,DE,2026-08-06 09:00:00,seo,1,1,0,ordered,O201,2026-08-07 09:30:00
+R202,U022,CMP002,PRD17P,DE,2026-08-08 09:00:00,direct,1,0,1,reserved_not_ordered,,
+R301,U031,CMP003,PRD17P,DE,2026-08-11 09:00:00,email,1,0,1,reserved_not_ordered,,
