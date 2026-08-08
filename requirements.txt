@@ -1,13 +1,12 @@
-boto3>=1.34
+pydantic>=2.7
 fastapi>=0.115
-uvicorn[standard]>=0.30
-pydantic>=2.8
-pydantic-settings>=2.4
-python-dotenv>=1.0
-
-# AI / Agent
+uvicorn>=0.30
 langgraph>=0.2
 langchain-openai>=0.2
 llama-index-core>=0.12
 llama-index-llms-openai>=0.3
 llama-index-embeddings-openai>=0.3
+llama-index-vector-stores-faiss>=0.3
+faiss-cpu>=1.8
+boto3>=1.34
+pytest>=8.0

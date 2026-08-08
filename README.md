@@ -2,109 +2,47 @@
 
 > A natural-language analytics layer built on top of a trusted Reservation Data Mart.
 
-The project separates **knowledge questions** from **data questions**:
+The project keeps the learning path deliberately small:
 
-- **LlamaIndex / RAG** explains business definitions, metric logic, and Data Mart metadata.
-- **Analytics Tool / SQL** returns actual business numbers from a configurable data backend.
-- **LangGraph** controls routing, validation, clarification, and state.
+- **LangGraph** controls routing and state.
+- **LlamaIndex + FAISS** handle business knowledge retrieval.
+- **Structured Output** extracts business context from natural language.
+- **Controlled SQL** returns actual numbers from the Reservation Data Mart.
+- **FastAPI + Docker** expose and package the service.
+- **SQLite** is the default local backend; Athena and SQL Gateway are optional adapters.
 
-![End-to-End Architecture](docs/architecture/architecture-overview.png)
+![End-to-End Architecture](docs/architecture/01-end-to-end.png)
 
-## 1. Start Here
+## Start Here
 
-1. Read **[Part 1 — Project Overview](docs/01_PROJECT_OVERVIEW.md)**.
-2. Read **[Part 2 — Agent Workflow](docs/02_AGENT_WORKFLOW.md)**.
-3. Open `app/graph.py` to see the LangGraph state machine.
-4. Open `app/services/campaign_resolver.py` and `app/services/analytics.py`.
-5. Read **[Part 3 — Data Backends](docs/03_DATA_BACKENDS.md)**.
-6. Run `python scripts/run_demo.py`.
-7. Read **[Part 4 — Code Learning Path](docs/04_CODE_LEARNING_PATH.md)** and trace one request end to end.
+If you want to understand the project in 1–2 days, follow this order:
 
-## 2. Business Problem
+1. Open **`learning/reservation_ai_learning.html`** for the audio-enabled visual guide.
+2. Run **`notebooks/01_structured_output.ipynb`** through **`05_end_to_end_agent.ipynb`**.
+3. Read the production code in this order:
+   `models.py → extractor.py → graph.py → rag.py → resolver.py → service.py → sqlite.py`.
+4. Only after the local path is clear, look at FastAPI, Docker, Athena, and SQL Gateway.
 
-Users reserve a product before launch. The business needs to answer:
+## Four Parts
 
-- How many users reserved?
-- How many later ordered?
-- Which users reserved but did not order?
-- What is the reservation-to-order conversion rate?
-- What do these metrics mean?
-
-The trusted Data Mart grain is:
-
-> **User × Campaign × Product × Site**
-
-Core fields include `user_id`, `campaign_id`, `product_id`, `site`, `reserve_flag`, `order_flag`, and the existing `tag_reserved_not_paid` field whose business meaning here is **reserved but not ordered**.
-
-## 3. Two Controlled Paths
-
-![Runtime Request Flow](docs/architecture/architecture-request-flow.png)
-
-### Knowledge path
-
-```text
-Question about definition / metric / Data Mart
-        ↓
-LangGraph
-        ↓
-LlamaIndex RAG
-        ↓
-knowledge/reservation_analytics.md
-```
-
-### Analytics path
-
-```text
-Question asking for actual numbers
-        ↓
-Structured extraction
-        ↓
-Validate required context
-        ↓
-Resolve one campaign_id
-        ↓
-Analytics Tool
-        ↓
-QueryBackend
-        ↓
-Reservation Data Mart
-```
-
-**Design rule:** RAG explains knowledge; SQL returns business numbers.
-
-## 4. Configurable Data Backend
-
-![Configurable Data Backends](docs/architecture/architecture-backends.png)
-
-The AI layer is not tied to one data platform.
-
-| Mode | Backend | Authentication | Typical use |
+| Part | Main idea | Production code | Learning notebook |
 |---|---|---|---|
-| Default | SQLite | Local file | Run the whole project locally |
-| AWS | Athena | IAM role / AWS SDK | AWS-based Data Mart |
-| Internal | SQL Gateway | `user_id` + token | Hive / Iceberg / Trino platform |
+| **1 — Core AI** | Structured Output + LangGraph | `app/core/` | `01_structured_output.ipynb`, `03_langgraph_routing.ipynb` |
+| **2 — Knowledge RAG** | LlamaIndex + FAISS | `app/knowledge/rag.py` | `02_llamaindex_faiss_rag.ipynb` |
+| **3 — SQL Analytics** | Campaign resolution + controlled SQL | `app/analytics/` | `04_controlled_sql.ipynb` |
+| **4 — Serving & Backends** | FastAPI, Docker, SQLite / Athena / SQL Gateway | `app/main.py`, `app/data/` | `05_end_to_end_agent.ipynb` |
 
-Region and cluster routing are described in **[Part 3 — Data Backends](docs/03_DATA_BACKENDS.md)**.
-
-![Region and Cluster Routing](docs/architecture/architecture-regions.png)
-
-## 5. Run Locally
+## Local Quick Start
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp config/default.env .env
-python scripts/run_demo.py
+python run.py
 ```
 
-Default mode uses SQLite and automatically builds:
-
-```text
-local_data/reservation_analytics.db
-```
-
-from the sample DIM and DM CSV files, so no AWS account or internal SQL Gateway is required.
+Default mode uses SQLite and sample data, so no cloud account or internal gateway is required.
 
 Run tests:
 
@@ -112,65 +50,126 @@ Run tests:
 pytest -q
 ```
 
-Run API:
+Run the API:
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-## 6. Repository Map
+Then send:
+
+```json
+POST /ask
+{
+  "question": "How many users reserved Phone Mi 17 Pro in Germany for CMP001?"
+}
+```
+
+## Core Request Flow
+
+```text
+Question
+  ↓
+Structured Output
+  ↓
+LangGraph
+  ├── Knowledge → LlamaIndex + FAISS → Grounded Answer
+  └── Analytics → Validate → Resolve campaign_id → Controlled SQL
+                                                   ↓
+                                               QueryBackend
+                                                   ↓
+                                      Reservation Data Mart
+```
+
+**Design rule:** RAG explains knowledge. SQL returns actual business numbers.
+
+## Repository Map
 
 ```text
 Reservation-Analytics-AI-Agent/
 ├── app/
-│   ├── graph.py                 # LangGraph workflow
-│   ├── agent_service.py         # high-level service entry
-│   ├── schemas.py               # structured state / request models
-│   └── services/
-│       ├── extractor.py         # natural language → structured context
-│       ├── knowledge.py         # LlamaIndex knowledge retrieval
-│       ├── campaign_resolver.py # context → unique campaign_id
-│       ├── analytics.py         # controlled SQL templates
-│       ├── query_backend.py     # backend interface
-│       ├── backend_factory.py   # backend selection
-│       ├── sqlite_backend.py    # local runnable backend
-│       ├── athena.py            # AWS backend
-│       └── sql_gateway.py       # internal platform backend
+│   ├── core/              # Part 1
+│   ├── knowledge/         # Part 2
+│   ├── analytics/         # Part 3
+│   ├── data/              # Part 4
+│   ├── settings.py
+│   └── main.py
 ├── knowledge/
-│   └── reservation_analytics.md
-├── mock_data/
-│   ├── dim_campaign.csv
-│   └── dm_reservation_conversion.csv
+├── sample_data/
 ├── config/
-│   ├── default.env
-│   ├── aws-athena.env
-│   ├── internal-sg.env
-│   └── internal-eu.env
+├── notebooks/
 ├── docs/
-│   ├── 01_PROJECT_OVERVIEW.md
-│   ├── 02_AGENT_WORKFLOW.md
-│   ├── 03_DATA_BACKENDS.md
-│   ├── 04_CODE_LEARNING_PATH.md
 │   └── architecture/
-└── scripts/run_demo.py
+├── learning/
+│   └── reservation_ai_learning.html
+├── tests/
+├── run.py
+├── Dockerfile
+└── requirements.txt
 ```
 
-## 7. Documentation Parts
+## Architecture
 
-| Part | Read this when you want to understand... |
-|---|---|
-| [Part 1](docs/01_PROJECT_OVERVIEW.md) | business problem, Data Mart, and overall architecture |
-| [Part 2](docs/02_AGENT_WORKFLOW.md) | LangGraph, LlamaIndex, validation, campaign resolution, SQL tool flow |
-| [Part 3](docs/03_DATA_BACKENDS.md) | SQLite, Athena, internal SQL Gateway, region and cluster routing |
-| [Part 4](docs/04_CODE_LEARNING_PATH.md) | exactly which source files to read and in what order |
-| [Architecture Assets](docs/architecture/README.md) | PNG/SVG diagrams and what each diagram explains |
+### Part 1 — Core AI
 
-## 8. Core Design Principles
+![Core AI](docs/architecture/02-core-ai.png)
 
-- Keep the **trusted Data Mart** separate from the AI application.
-- Never let the LLM invent a `campaign_id`.
-- Ask for clarification when business context is missing or ambiguous.
-- Do not let the LLM generate unrestricted production SQL.
-- Keep the data backend behind a configurable adapter.
-- Keep credentials outside source code.
-- Route regional workloads to the correct region / cluster.
+### Part 2 — LlamaIndex + FAISS
+
+![LlamaIndex + FAISS](docs/architecture/03-llamaindex-faiss.png)
+
+### Part 3 — Controlled SQL Analytics
+
+![Controlled SQL](docs/architecture/04-sql-analytics.png)
+
+### Part 4 — Serving and Data Backends
+
+![Data Backends](docs/architecture/05-data-backends.png)
+
+PNG is used in the README; matching SVG files are available in `docs/architecture/`.
+
+## Sample Business Model
+
+The Reservation Data Mart grain is:
+
+> **User × Campaign × Product × Site**
+
+Sample fields:
+
+```text
+user_id
+campaign_id
+product_id
+site
+reserve_flag
+order_flag
+reserved_not_ordered_flag
+```
+
+Sample expected result for `CMP001`:
+
+```text
+Reserved users:             8
+Ordered users:              5
+Reserved but not ordered:   3
+Conversion rate:            62.50%
+```
+
+## Backend Switching
+
+The upper agent logic only calls:
+
+```python
+backend.execute(sql)
+```
+
+Configuration selects the physical backend:
+
+```text
+config/default.env      → SQLite
+config/aws.env          → Athena
+config/internal-sg.env  → SQL Gateway / SG cluster
+config/internal-eu.env  → SQL Gateway / EU cluster
+```
+
+Changing the backend does not change the LangGraph workflow, RAG path, or metric logic.

@@ -1,12 +1,11 @@
 # Architecture Assets
 
-The repository keeps both **PNG** and **SVG** versions of each architecture diagram.
+Each diagram has a PNG for README/docs rendering and an SVG for crisp zooming.
 
-The root README embeds PNG for consistent GitHub rendering. SVG is provided for lossless zooming and reuse.
-
-| Diagram | PNG | SVG | Purpose |
-|---|---|---|---|
-| End-to-End Architecture | `architecture-overview.png` | `architecture-overview.svg` | complete system boundary and two answer paths |
-| Runtime Request Flow | `architecture-request-flow.png` | `architecture-request-flow.svg` | one request through LangGraph |
-| Configurable Backends | `architecture-backends.png` | `architecture-backends.svg` | SQLite / Athena / SQL Gateway adapter pattern |
-| Region & Cluster Routing | `architecture-regions.png` | `architecture-regions.svg` | Singapore / Europe routing |
+| Diagram | PNG | SVG |
+|---|---|---|
+| End-to-End Architecture | `01-end-to-end.png` | `01-end-to-end.svg` |
+| Core AI Flow | `02-core-ai.png` | `02-core-ai.svg` |
+| LlamaIndex + FAISS RAG | `03-llamaindex-faiss.png` | `03-llamaindex-faiss.svg` |
+| Controlled SQL Analytics | `04-sql-analytics.png` | `04-sql-analytics.svg` |
+| Serving and Data Backends | `05-data-backends.png` | `05-data-backends.svg` |

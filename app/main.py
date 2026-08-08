@@ -1,62 +1,30 @@
-from __future__ import annotations
-
 from fastapi import FastAPI
+from pydantic import BaseModel
 
-from app.agent_service import ReservationAgentService
-from app.config import AppSettings
-from app.schemas import ChatRequest, ChatResponse
+from app.core.graph import ReservationAgent
+from app.data.backend import create_backend
+from app.settings import load_settings
 
 
-settings = AppSettings()
-service = ReservationAgentService(settings)
+settings = load_settings()
+agent = ReservationAgent(settings, create_backend(settings))
+app = FastAPI(title="Reservation Analytics AI Agent")
 
-app = FastAPI(
-    title="Reservation Analytics AI Agent",
-    version="2.0.0",
-    description=(
-        "AI layer over a configurable Reservation Data Mart backend. "
-        "Default local mode uses SQLite; enterprise backends can use Athena "
-        "or an internal SQL gateway."
-    ),
-)
+
+class AskRequest(BaseModel):
+    question: str
 
 
 @app.get("/health")
-def health():
+def health() -> dict:
+    return {"status": "ok", "backend": settings.backend}
+
+
+@app.post("/ask")
+def ask(request: AskRequest) -> dict:
+    result = agent.invoke(request.question)
     return {
-        "status": "ok",
-        "mock_mode": settings.mock_mode,
-        "data_backend": service.backend.name,
-        "region": settings.data_region,
-        "cluster": settings.data_cluster,
-        "dm": f"{settings.dm_database}.{settings.dm_table}",
-    }
-
-
-@app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest):
-    return service.chat(req.message, req.session_id)
-
-
-@app.post("/reset/{session_id}")
-def reset(session_id: str):
-    service.reset(session_id)
-    return {"status": "reset", "session_id": session_id}
-
-
-@app.get("/examples")
-def examples():
-    return {
-        "knowledge": [
-            "What does reserved-but-not-ordered mean?",
-            "How is reservation-to-order conversion rate calculated?",
-        ],
-        "analytics": [
-            "How many users reserved Xiaomi 17 Pro in Germany for CMP001 but did not order?",
-            "What was the conversion rate for Xiaomi 17 Pro in Germany for CMP001?",
-        ],
-        "clarification": [
-            "How many users reserved Xiaomi 17 Pro?",
-            "Analyze the Xiaomi 17 Pro campaign in Germany in August 2026.",
-        ],
+        "answer": result.get("answer", ""),
+        "route": result.get("route", ""),
+        "status": result.get("status", ""),
     }
