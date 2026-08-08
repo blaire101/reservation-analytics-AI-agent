@@ -38,7 +38,8 @@ class KnowledgeRAG:
         )
 
         documents = SimpleDirectoryReader(
-            input_files=[str(self.settings.knowledge_file)]
+            input_dir=str(self.settings.knowledge_dir),
+            required_exts=[".md"],
         ).load_data()
 
         # text-embedding-3-small defaults to 1536 dimensions.
