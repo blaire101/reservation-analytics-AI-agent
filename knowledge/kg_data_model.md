@@ -27,7 +27,7 @@ This document describes the core warehouse tables used by the Reservation Analyt
 | `fuser_id_hash` | STRING | Hashed user identifier used in analytics outputs and detail responses |
 | `fcampaign_id` | STRING | Campaign ID |
 | `fproduct_id` | STRING | Product ID |
-| `fcountry_code` | STRING | Country/site code |
+| `fcountry_code` | STRING | Country/site code, Business site / market code, e.g. SG, TW, HK, DE |
 | `freserve_flag` | BIGINT | `1=Reserved, 0=Not reserved` |
 | `forder_flag` | BIGINT | `1=Ordered, 0=Not ordered` |
 | `ftag_reserved_not_paid` | BIGINT | `1=Reserved but not ordered, 0=Otherwise` |
@@ -62,7 +62,7 @@ This document describes the core warehouse tables used by the Reservation Analyt
 | `fcampaign_name` | STRING | Campaign name |
 | `fcampaign_type` | STRING | Campaign type |
 | `fproduct_id` | STRING | Product ID |
-| `fcountry_code` | STRING | Country/site code, e.g. `DE`, `SG` |
+| `fcountry_code` | STRING | Country/site code, Business site / market code, e.g. SG, TW, HK, DE |
 | `fstart_time` | STRING | Campaign start time |
 | `fend_time` | STRING | Campaign end time |
 | `fcampaign_status` | BIGINT | `0=Planned, 1=Active, 2=Ended` |
@@ -139,7 +139,7 @@ This document describes the core warehouse tables used by the Reservation Analyt
 | `fdate` | STRING | Partition field |
 | `fetl_time` | STRING | ETL processing time |
 | `fid` | BIGINT | Source-system technical ID |
-| `fcountry_code` | STRING | Country/site code |
+| `fcountry_code` | STRING | Country/site code, Business site / market code, e.g. SG, TW, HK, DE |
 | `fcountry_name` | STRING | Country/site name |
 | `fregion_code` | STRING | Business region code |
 | `fregion_name` | STRING | Business region name |
