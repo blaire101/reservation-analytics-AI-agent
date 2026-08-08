@@ -12,8 +12,6 @@ The project separates **knowledge questions** from **data questions**:
 
 ## 1. Start Here
 
-If this is your first time opening the repository, follow this order:
-
 1. Read **[Part 1 — Project Overview](docs/01_PROJECT_OVERVIEW.md)**.
 2. Read **[Part 2 — Agent Workflow](docs/02_AGENT_WORKFLOW.md)**.
 3. Open `app/graph.py` to see the LangGraph state machine.
