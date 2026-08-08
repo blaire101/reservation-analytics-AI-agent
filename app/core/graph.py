@@ -66,12 +66,12 @@ class ReservationAgent:
             }
         return {
             **state,
-            "campaign": campaigns[0].model_dump(),
+            "resolved_context": campaigns[0].model_dump(),
             "status": "resolved",
         }
 
     def analytics_node(self, state: AgentState) -> AgentState:
-        campaign = Campaign(**state["campaign"])
+        campaign = Campaign(**state["resolved_context"])
         return {
             **state,
             "route": "analytics",

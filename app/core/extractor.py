@@ -23,41 +23,67 @@ def _metric(question: str) -> str:
     return "summary"
 
 
-def _local_extract(question: str, default_year: int) -> ExtractedRequest:
-    q = question.strip()
-    low = q.lower()
-    intent = "knowledge" if any(x in low for x in KNOWLEDGE_HINTS) else "analytics"
+def _local_extract(question: str) -> ExtractedRequest:
+    """Minimal fallback used when LLM mode is disabled."""
 
-    campaign = re.search(r"\bCMP\d+\b", q, flags=re.I)
-    month_names = {
-        "january": 1, "february": 2, "march": 3, "april": 4,
-        "may": 5, "june": 6, "july": 7, "august": 8,
-        "september": 9, "october": 10, "november": 11, "december": 12,
-    }
-    month = next((n for name, n in month_names.items() if name in low), None)
-    year_match = re.search(r"\b20\d{2}\b", q)
+    text = question.lower()
 
-    country = next(
-        (value for value in ("Germany", "Singapore", "France", "Italy", "Spain") if value.lower() in low),
-        None,
+    if "what does" in text or "mean" in text:
+        return ExtractedRequest(intent="knowledge")
+
+    return ExtractedRequest(
+        intent="analytics",
+        metric="summary",
+        query=ReservationQuery(),
     )
-    product_match = re.search(
-        r"(Phone\s+Mi\s+[A-Za-z0-9.-]+(?:\s+[A-Za-z0-9.-]+){0,2}?)(?=\s+(?:in|for|during|on)\b|[?.!,]|$)",
-        q,
-        flags=re.I,
+
+
+def _local_extract(self, question: str) -> ExtractedRequest:
+    """
+    Minimal fallback when LLM mode is disabled.
+
+    Only detects:
+    - knowledge vs analytics
+    - requested metric
+    - whether detail rows are requested
+
+    It does not extract campaign/product/country.
+
+    question example:
+        knowledge: 1. What does reserved but not ordered mean?
+        analytics: 2. How many users reserved?
+    """
+
+    text = question.lower()
+
+    # Knowledge question.
+    if any(word in text for word in ["what is", "what does", "mean", "definition"]):
+        return ExtractedRequest(
+            intent="knowledge",
+        )
+
+    # Analytics question.
+    metric = "summary"
+
+    if "conversion" in text:
+        metric = "conversion_rate"
+    elif "not ordered" in text or "reserved but not ordered" in text:
+        metric = "reserved_not_ordered"
+    elif "ordered" in text:
+        metric = "ordered_users"
+    elif "reserved" in text or "reservation" in text:
+        metric = "reserved_users"
+
+    detail_requested = any(
+        word in text
+        for word in ["show users", "list users", "details"]
     )
 
     return ExtractedRequest(
-        intent=intent,
-        metric=_metric(q),
-        detail_requested=any(x in low for x in DETAIL_HINTS),
-        query=ReservationQuery(
-            country=country,
-            product=product_match.group(1).strip() if product_match else None,
-            campaign_id=campaign.group(0).upper() if campaign else None,
-            campaign_month=month,
-            campaign_year=int(year_match.group(0)) if year_match else (default_year if month else None),
-        ),
+        intent="analytics",
+        metric=metric,
+        detail_requested=detail_requested,
+        query=ReservationQuery(),
     )
 
 
