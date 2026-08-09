@@ -84,6 +84,14 @@ def _local_extract(self, question: str) -> ExtractedRequest:
     )
 
 
+"""
+User Question
+   ↓
+RequestExtractor
+   ↓
+ExtractedRequest  ( Pydantic Data Model )
+"""
+
 class RequestExtractor:
     def __init__(self, settings: Settings):
         self.settings = settings

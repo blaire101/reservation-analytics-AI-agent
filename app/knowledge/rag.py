@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import re
-
 from app.settings import Settings
 
 
@@ -19,6 +17,8 @@ class KnowledgeRAG:
     def _build_engine(self):
         """
         Build and cache the LlamaIndex RAG query engine. （Create index from documents）
+        initializes the LlamaIndex/FAISS query engine used by the knowledge RAG layer.
+
         Flow:
             Markdown knowledge files
             -> LlamaIndex Documents
