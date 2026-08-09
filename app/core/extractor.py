@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import re
-
 from app.core.models import ExtractedRequest, ReservationQuery
 from app.settings import Settings
-
 
 KNOWLEDGE_HINTS = ("what is", "what does", "define", "definition", "how is", "grain", "field", "table")
 DETAIL_HINTS = ("show", "list", "detail", "which users", "user list")

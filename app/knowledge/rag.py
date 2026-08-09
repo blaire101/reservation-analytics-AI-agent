@@ -18,7 +18,7 @@ class KnowledgeRAG:
 
     def _build_engine(self):
         """
-        Build and cache the LlamaIndex RAG query engine.
+        Build and cache the LlamaIndex RAG query engine. （Create index from documents）
         Flow:
             Markdown knowledge files
             -> LlamaIndex Documents
@@ -112,7 +112,6 @@ class KnowledgeRAG:
 
         return self._engine
 
-
     def _local_answer(self, question: str) -> str:
         low = question.lower()
         if "reserved" in low and ("not ordered" in low or "did not order" in low):
@@ -122,11 +121,7 @@ class KnowledgeRAG:
         if "grain" in low:
             return "dm_reservation_subject_df has grain User × Campaign × Product × Country."
 
-        sections = re.split(r"(?m)^##\s+", self.text)
-        tokens = {x for x in re.findall(r"[a-z0-9_-]+", low) if len(x) > 2}
-        ranked = sorted(sections, key=lambda s: sum(t in s.lower() for t in tokens), reverse=True)
-        lines = [line.strip() for line in ranked[0].splitlines() if line.strip()]
-        return " ".join(lines[:6])[:900]
+        return "Please refer to the project knowledge documentation."
 
     def answer(self, question: str) -> str:
         if not self.settings.use_llm:
