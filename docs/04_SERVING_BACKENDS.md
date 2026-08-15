@@ -8,12 +8,14 @@ Keep serving and physical data access separate from the Core AI workflow.
 
 ## FastAPI
 
-`app/main.py` exposes two small endpoints:
+`app/main.py` exposes two small endpoints and keeps the HTTP layer thin:
 
 ```text
 GET  /health
 POST /ask
 ```
+
+`POST /ask` accepts `question` plus an optional `session_id`. If the caller omits the ID, the API generates one and returns it. A clarification follow-up must reuse the same ID. Feishu can derive a stable key from `chat_id + thread/root_message_id + user_id` to isolate concurrent users.
 
 ## Docker
 

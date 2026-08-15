@@ -4,7 +4,9 @@
 
 - **LangGraph** controls routing and state.
 - **LlamaIndex + FAISS** retrieve metric and data-model knowledge.
-- **Structured Output** extracts Campaign + Product + Country context.
+- **Structured Output** classifies Knowledge vs Analytics and extracts multilingual business context.
+- **Dimension-backed Entity Resolution** maps free-text country/product/campaign mentions to governed candidates and stable IDs.
+- **Stateful Clarification** keeps candidate context by `session_id` and resumes after the user confirms an ambiguous entity.
 - **Controlled SQL** returns aggregate metrics or detail records.
 - **FastAPI + Docker** serve and package the application.
 - **SQLite** runs locally; Athena and SQL Gateway are optional adapters.
@@ -13,7 +15,7 @@
 
 ## Start Here
 
-1. Open `learning/reservation_ai_learning.html`.
+1. Open `presentation/reservation_ai_learning_v836.html`.
 2. Run notebooks `01` through `05`.
 3. Read: `models.py → extractor.py → graph.py → rag.py → resolver.py → service.py → sqlite.py`.
 4. Read remote backends only after the local path is clear.
@@ -63,8 +65,14 @@ Structured Output
   ↓
 LangGraph
   ├── Knowledge → LlamaIndex → FAISS → Grounded Answer
-  └── Analytics → Resolve Campaign + Product + Country
-                               ↓
+  └── Analytics → Validate → Dimension Candidates
+                              ↓
+                    Conservative Entity Match
+                      ↙ unique      ambiguous ↘
+                 Stable IDs        Clarify User
+                      ↑                 ↓
+                      └──── session memory ────┘
+                              ↓
                          Controlled SQL
                                ↓
                          QueryBackend
@@ -109,3 +117,41 @@ config/internal.env  → SQL Gateway; edit region/cluster/endpoint only
 ```
 
 See `config/README.md` for the common keys, backend-specific keys, and secret-loading rules.
+
+
+## Multilingual Entity Resolution & Clarification
+
+The LLM does **not** invent `DE`, `P001`, or `CMP001`. It extracts the user's wording, then the application queries governed dimensions and asks the LLM to select only from returned candidate IDs.
+
+```text
+"Germany" / "德国"
+        ↓
+dim_site_df candidates
+        ↓
+DE
+
+"Mi 17" / "M Brand17" / irregular spacing
+        ↓
+dim_product_df candidates
+        ↓
+unique product_id OR clarification
+
+campaign description
+        ↓
+dim_campaign_df candidates (already narrowed by product/country/time)
+        ↓
+unique campaign_id OR clarification
+```
+
+If multiple candidates remain, `/ask` returns `status=clarification`, `pending_entity`, and governed candidates. The next message with the same `session_id` is treated as the user's confirmation and resumes resolution before analytics SQL runs.
+
+```json
+{
+  "question": "Use CMP001",
+  "session_id": "chat_001:thread_009:user_888"
+}
+```
+
+For a generic API client, `session_id` is optional. If omitted, `/ask` generates and returns one; reuse that returned ID for any clarification follow-up. For Feishu, the adapter should derive a stable key from chat + thread/root message + user so concurrent users do not share state.
+
+The bundled implementation uses lightweight in-process Python session memory for the project discussion prototype. It survives only while that process is alive. This is intentional for the demo; durable cross-process or multi-pod state is an optional production evolution.

@@ -32,3 +32,8 @@ Question → Extract → Route
 ```
 
 The graph does not contain SQL implementation or FAISS implementation. It only coordinates them.
+
+
+## Stateful clarification
+
+`ReservationAgent.invoke(question, session_id=...)` keeps clarification context for the session. When entity resolution is ambiguous, the state stores `pending_entity` and the governed candidate list. The user's next message is matched only against those candidates, then the workflow resumes with the confirmed stable ID. This is a lightweight prototype memory loop; a production deployment can replace the in-process store with durable checkpoint storage.

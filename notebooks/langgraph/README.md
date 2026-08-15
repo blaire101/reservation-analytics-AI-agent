@@ -206,7 +206,7 @@ invoke()
 
 After that, learn tools, checkpointing, human-in-the-loop, streaming, and persistence only when you need them.
 
-## Interview summary
+## Project Discussion summary
 
 > We use LangGraph as the orchestration layer for the reservation analytics agent. It first extracts a structured request and separates knowledge questions from analytics questions. Knowledge questions go to RAG. Analytics questions go through explicit context validation and campaign resolution before reaching the analytics service. Conditional edges make routing, clarification, and stopping conditions deterministic and easy to inspect.
 

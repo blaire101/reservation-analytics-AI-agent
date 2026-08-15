@@ -1,43 +1,30 @@
-# Part 3 — SQL Analytics
+# Controlled SQL Analytics
 
-![Controlled SQL Analytics](architecture/04-sql-analytics.png)
-
-## Goal
-
-Return aggregate metrics or detail records through controlled SQL.
-
-## Read in This Order
+The analytics path separates natural-language understanding from trusted execution.
 
 ```text
-app/analytics/resolver.py
-      ↓
-app/analytics/service.py
-      ↓
-app/data/sqlite.py
-```
-
-## Flow
-
-```text
-Structured Business Context
-↓
-Validate Required Fields
-↓
-Resolve Campaign + Product + Country
-↓
-Choose Controlled SQL
-↓
-backend.execute(sql)
-↓
+Question
+  ↓
+Structured ReservationQuery
+  ↓
+Validate required context
+  ↓
+Dimension-backed entity resolution
+  ├─ dim_site_df     → country_code
+  ├─ dim_product_df  → product_id
+  └─ dim_campaign_df → campaign_id
+  ↓
+Unique?
+  ├─ yes → Stable IDs
+  └─ no  → Clarification → session memory → resume
+  ↓
+AnalyticsService
+  ↓
+QueryBackend.execute(sql)
+  ↓
 dm_reservation_subject_df
-↓
-Metric or Detail Result
 ```
 
-## Resolution Rule
+The candidate selector is conservative: it may compare multilingual or informal user wording against dimension candidates, but it can only return IDs that came from those governed dimensions. It never invents warehouse IDs.
 
-- 0 matches → return not found.
-- 1 match → execute analytics SQL.
-- Multiple matches → ask for clarification.
-
-Detail responses return `fuser_id_hash`; raw `fuser_id` is not exposed. The LLM does not generate unrestricted production SQL.
+`AnalyticsService` still owns supported metrics and SQL templates. The LLM does not get unrestricted database access.

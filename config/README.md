@@ -67,3 +67,9 @@ DATA_REGION=eu
 DATA_CLUSTER=eu-prod
 SQL_GATEWAY_ENDPOINT=https://sql-gateway-eu.example.internal/query
 ```
+
+## Multilingual Entity Resolution
+
+Cross-language semantic matching (for example `德国` → governed candidate `DE — Germany`) requires `LLM_ENABLED=true` and a runtime `OPENAI_API_KEY`.
+
+The resolver still remains controlled: it first loads candidates from `dim_site_df`, `dim_product_df`, or `dim_campaign_df`, and the LLM may only select IDs from that candidate set. Offline/local fallback uses conservative lexical matching and asks for clarification instead of guessing when it cannot safely resolve an entity.
