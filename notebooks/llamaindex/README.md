@@ -32,9 +32,9 @@ After finishing this notebook you should understand:
 
 ![LlamaIndex RAG pipeline](assets/01_rag_pipeline.svg)
 
-![LlamaIndex object model](assets/02_index_objects.svg)
+![LlamaIndex object model](assets/02_objects.svg)
 
-![Current project mapping](assets/03_project_mapping.svg)
+![Current project mapping](assets/03_project.svg)
 
 ---
 

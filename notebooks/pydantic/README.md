@@ -28,9 +28,9 @@ Pydantic is the **typed contract layer** of this project.
 
 ## 2. Architecture
 
-![Pydantic contracts](assets/01_contracts.svg)
+![Pydantic contracts](assets/01_contract.svg)
 
-![Project models](assets/02_project_models.svg)
+![Project models](assets/02_models.svg)
 
 ![Nested validation](assets/03_nested.svg)
 

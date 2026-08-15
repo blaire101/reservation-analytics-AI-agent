@@ -29,11 +29,11 @@ FAISS is the **vector similarity-search engine** underneath this project's Llama
 
 ## 2. Architecture
 
-![FAISS vector search](assets/01_vector_search.svg)
+![FAISS vector search](assets/01_search.svg)
 
 ![L2 mental model](assets/02_l2.svg)
 
-![FAISS in the project](assets/03_project_mapping.svg)
+![FAISS in the project](assets/02_project.svg)
 
 ---
 

@@ -31,7 +31,7 @@ This folder explains how the Reservation Analytics AI Agent becomes an **HTTP se
 
 ## 2. Architecture
 
-![FastAPI request flow](assets/01_request_flow.svg)
+![FastAPI request flow](assets/01_request.svg)
 
 ![FastAPI and Uvicorn](assets/02_asgi.svg)
 
