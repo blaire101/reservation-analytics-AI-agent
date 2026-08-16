@@ -15,9 +15,9 @@
 
 ## Start Here
 
-1. Open `presentation/reservation_ai_learning_v836.html`.
+1. Open `presentation/reservation_ai_learning_v837.html`.
 2. Run notebooks `01` through `05`.
-3. Read: `models.py → extractor.py → graph.py → rag.py → resolver.py → service.py → sqlite.py`.
+3. Read `app/README.md`, then follow the short code-reading path there.
 4. Read remote backends only after the local path is clear.
 
 ## Four Parts
@@ -26,7 +26,7 @@
 |---|---|---|
 | **1 — Core AI** | Structured Output + LangGraph | `app/core/` |
 | **2 — Knowledge RAG** | LlamaIndex + FAISS | `knowledge/`, `app/knowledge/rag.py` |
-| **3 — SQL Analytics** | Context resolution + controlled SQL | `app/analytics/` |
+| **3 — SQL Analytics** | Candidate lookup + entity resolution + controlled SQL | `app/analytics/` |
 | **4 — Serving & Backends** | FastAPI, Docker, backend adapters | `app/main.py`, `app/data/` |
 
 ## Knowledge Sources
@@ -121,7 +121,7 @@ See `config/README.md` for the common keys, backend-specific keys, and secret-lo
 
 ## Multilingual Entity Resolution & Clarification
 
-The LLM does **not** invent `DE`, `P001`, or `CMP001`. It extracts the user's wording, then the application queries governed dimensions and asks the LLM to select only from returned candidate IDs.
+The LLM does **not** invent `DE`, `P001`, or `CMP001`. It extracts the user's wording, then the application queries governed dimensions and allows selection only from returned candidate IDs.
 
 ```text
 "Germany" / "德国"
@@ -142,6 +142,8 @@ dim_campaign_df candidates (already narrowed by product/country/time)
         ↓
 unique campaign_id OR clarification
 ```
+
+**Product is optional input.** If a campaign is uniquely identified, the campaign dimension supplies its product and country IDs.
 
 If multiple candidates remain, `/ask` returns `status=clarification`, `pending_entity`, and governed candidates. The next message with the same `session_id` is treated as the user's confirmation and resumes resolution before analytics SQL runs.
 

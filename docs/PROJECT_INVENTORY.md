@@ -1,19 +1,24 @@
 # Project Inventory
 
-This file is a quick completeness check for the project discussion package.
+## Application
 
-## Core Application
-
+- `app/README.md`
+- `app/main.py`
+- `app/settings.py`
 - `app/core/models.py`
 - `app/core/extractor.py`
+- `app/core/validation.py`
+- `app/core/session.py`
 - `app/core/graph.py`
+- `app/analytics/repository.py`
+- `app/analytics/selector.py`
 - `app/analytics/resolver.py`
 - `app/analytics/service.py`
+- `app/analytics/sql_utils.py`
 - `app/knowledge/rag.py`
 - `app/data/backend.py`
 - `app/data/sqlite.py`
 - `app/data/remote.py`
-- `app/main.py`
 
 ## Project-Flow Notebooks
 
@@ -34,7 +39,7 @@ This file is a quick completeness check for the project discussion package.
 
 ## Presentation / Learning Material
 
-- `presentation/reservation_ai_learning_v836.html`
+- `presentation/reservation_ai_learning_v837.html`
 - `presentation/reservation_analytics_ai_agent_7slides_v11_clean.pptx`
 
 ## Configuration
@@ -47,6 +52,6 @@ This file is a quick completeness check for the project discussion package.
 
 ## Validation
 
-- Markdown image references checked: no missing local images.
-- All 11 notebooks validated as notebook JSON and executed successfully in the local environment.
-- `pytest`: 8 tests passed.
+- Local image references checked.
+- Notebook files validated as JSON.
+- `python -m pytest -q`: 12 tests passed.

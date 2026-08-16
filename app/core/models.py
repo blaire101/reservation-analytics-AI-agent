@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class ReservationQuery(BaseModel):
-    """Natural-language business context plus stable IDs resolved by the application."""
+    """Business context extracted from the question and enriched by the resolver."""
 
     country: str | None = None
     country_code: str | None = None
@@ -21,6 +21,8 @@ class ReservationQuery(BaseModel):
 
 
 class ExtractedRequest(BaseModel):
+    """Typed output produced by the request extractor."""
+
     intent: Literal["knowledge", "analytics"]
     metric: str = "summary"
     detail_requested: bool = False
@@ -28,6 +30,8 @@ class ExtractedRequest(BaseModel):
 
 
 class Campaign(BaseModel):
+    """One fully resolved Campaign + Product + Country context."""
+
     campaign_id: str
     campaign_name: str
     product_id: str
@@ -39,7 +43,7 @@ class Campaign(BaseModel):
 
 
 class EntityCandidate(BaseModel):
-    """A governed dimension candidate. The LLM may select only from these IDs."""
+    """One governed dimension candidate shown to the selector or user."""
 
     entity_id: str
     name: str
@@ -47,6 +51,8 @@ class EntityCandidate(BaseModel):
 
 
 class EntitySelection(BaseModel):
+    """Selector decision over a governed candidate list."""
+
     status: Literal["resolved", "ambiguous", "not_found"]
     selected_id: str | None = None
     candidate_ids: list[str] = Field(default_factory=list)
@@ -54,6 +60,8 @@ class EntitySelection(BaseModel):
 
 
 class ResolutionResult(BaseModel):
+    """Business-context resolution result returned to the graph."""
+
     status: Literal["resolved", "clarification", "not_found"]
     query: ReservationQuery
     campaign: Campaign | None = None
@@ -63,17 +71,20 @@ class ResolutionResult(BaseModel):
 
 
 class AgentState(TypedDict, total=False):
+    """Small state passed between LangGraph nodes and clarification turns."""
+
     question: str
+    session_id: str
+
     intent: str
     metric: str
     detail_requested: bool
     query: dict
-    resolved_context: dict
+
+    route: str
     status: str
     answer: str
-    route: str
+    resolved_context: dict
 
-    # Stateful clarification fields.
-    session_id: str
     pending_entity: str
     candidates: list[dict]

@@ -1,23 +1,28 @@
 from __future__ import annotations
 
-from app.analytics.resolver import CampaignResolver, missing_context
+from app.analytics.resolver import CampaignResolver
 from app.analytics.service import AnalyticsService
 from app.core.extractor import RequestExtractor
 from app.core.models import AgentState, Campaign, EntityCandidate, ReservationQuery, ResolutionResult
+from app.core.session import InMemorySessionStore
+from app.core.validation import missing_analytics_context
+from app.data.backend import QueryBackend
 from app.knowledge.rag import KnowledgeRAG
 from app.settings import Settings
 
 
 class ReservationAgent:
-    """Stateful reservation agent with a lightweight per-session clarification loop."""
+    """Route questions, resolve business context, and resume clarification by session."""
 
-    def __init__(self, settings: Settings, backend):
+    def __init__(self, settings: Settings, backend: QueryBackend):
         self.extractor = RequestExtractor(settings)
         self.knowledge = KnowledgeRAG(settings)
         self.resolver = CampaignResolver(backend, settings)
         self.analytics = AnalyticsService(backend)
-        self._sessions: dict[str, AgentState] = {}
-        self._graph = self._build_langgraph()
+        self.sessions = InMemorySessionStore()
+        self.graph = self._build_graph()
+
+    # ----- LangGraph nodes -----
 
     def extract_node(self, state: AgentState) -> AgentState:
         request = self.extractor.extract(state["question"])
@@ -30,113 +35,182 @@ class ReservationAgent:
         }
 
     def knowledge_node(self, state: AgentState) -> AgentState:
-        return {**state, "route": "knowledge", "status": "answered", "answer": self.knowledge.answer(state["question"])}
+        return {
+            **state,
+            "route": "knowledge",
+            "status": "answered",
+            "answer": self.knowledge.answer(state["question"]),
+        }
 
     def validate_node(self, state: AgentState) -> AgentState:
         query = ReservationQuery(**state["query"])
-        missing = missing_context(query)
-        if missing:
-            return {
-                **state,
-                "status": "clarification",
-                "route": "analytics",
-                "answer": "Please provide " + ", ".join(missing) + ". I will not guess.",
-            }
-        return {**state, "status": "validated"}
+        missing = missing_analytics_context(query)
+        if not missing:
+            return {**state, "status": "validated"}
 
-    def _apply_resolution(self, state: AgentState, result: ResolutionResult) -> AgentState:
-        base = {**state, "query": result.query.model_dump(), "route": "analytics", "status": result.status}
+        return {
+            **state,
+            "route": "analytics",
+            "status": "clarification",
+            "answer": "Please provide " + ", ".join(missing) + ". I will not guess.",
+        }
+
+    def resolve_node(self, state: AgentState) -> AgentState:
+        query = ReservationQuery(**state["query"])
+        return self._apply_resolution(state, self.resolver.resolve(query))
+
+    def analytics_node(self, state: AgentState) -> AgentState:
+        campaign = Campaign(**state["resolved_context"])
+        answer = self.analytics.run(
+            metric=state["metric"],
+            campaign=campaign,
+            detail_requested=state.get("detail_requested", False),
+        )
+        return {
+            **state,
+            "route": "analytics",
+            "status": "answered",
+            "answer": answer,
+        }
+
+    # ----- Public entry point -----
+
+    def invoke(self, question: str, session_id: str = "demo-session") -> AgentState:
+        previous = self.sessions.get(session_id)
+
+        if self._is_waiting_for_clarification(previous):
+            result = self._resume_clarification(question, previous)
+        else:
+            result = self._run_new_question(question, session_id)
+
+        self._remember_only_pending_clarification(session_id, result)
+        return result
+
+
+    def _run_new_question(self, question: str, session_id: str) -> AgentState:
+        initial: AgentState = {"question": question, "session_id": session_id}
+        if self.graph is not None:
+            return self.graph.invoke(initial)
+
+        # Lightweight fallback used only when LangGraph is not installed.
+        state = self.extract_node(initial)
+        if state["intent"] == "knowledge":
+            return self.knowledge_node(state)
+
+        state = self.validate_node(state)
+        if state["status"] != "validated":
+            return state
+
+        state = self.resolve_node(state)
+        if state["status"] != "resolved":
+            return state
+
+        return self.analytics_node(state)
+
+    # ----- Clarification resume -----
+
+    def _resume_clarification(
+        self,
+        user_answer: str,
+        previous: AgentState,
+    ) -> AgentState:
+        result = self.resolver.confirm(
+            entity_type=previous["pending_entity"],
+            user_answer=user_answer,
+            candidates=[
+                EntityCandidate(**item)
+                for item in previous.get("candidates", [])
+            ],
+            raw_query=ReservationQuery(**previous["query"]),
+        )
+
+        state = self._apply_resolution(
+            {**previous, "question": user_answer},
+            result,
+        )
+        if state["status"] == "resolved":
+            return self.analytics_node(state)
+        return state
+
+    @staticmethod
+    def _is_waiting_for_clarification(state: AgentState | None) -> bool:
+        return bool(
+            state
+            and state.get("status") == "clarification"
+            and state.get("pending_entity")
+        )
+
+    def _remember_only_pending_clarification(
+        self,
+        session_id: str,
+        state: AgentState,
+    ) -> None:
+        if self._is_waiting_for_clarification(state):
+            self.sessions.save(session_id, state)
+        else:
+            self.sessions.clear(session_id)
+
+    @staticmethod
+    def _apply_resolution(
+        state: AgentState,
+        result: ResolutionResult,
+    ) -> AgentState:
+        base: AgentState = {
+            **state,
+            "query": result.query.model_dump(),
+            "route": "analytics",
+            "status": result.status,
+        }
+
         if result.status == "resolved" and result.campaign:
-            return {**base, "resolved_context": result.campaign.model_dump(), "status": "resolved"}
+            return {
+                **base,
+                "status": "resolved",
+                "resolved_context": result.campaign.model_dump(),
+            }
+
         if result.status == "clarification":
             return {
                 **base,
                 "status": "clarification",
                 "answer": result.message,
                 "pending_entity": result.pending_entity or "",
-                "candidates": [c.model_dump() for c in result.candidates],
+                "candidates": [candidate.model_dump() for candidate in result.candidates],
             }
+
         return {**base, "status": "not_found", "answer": result.message}
 
-    def resolve_node(self, state: AgentState) -> AgentState:
-        return self._apply_resolution(state, self.resolver.resolve(ReservationQuery(**state["query"])))
+    # ----- Graph definition -----
 
-    def analytics_node(self, state: AgentState) -> AgentState:
-        campaign = Campaign(**state["resolved_context"])
-        return {
-            **state,
-            "route": "analytics",
-            "status": "answered",
-            "answer": self.analytics.run(state["metric"], campaign, state.get("detail_requested", False)),
-        }
-
-    @staticmethod
-    def _after_extract(state: AgentState) -> str:
-        return "knowledge" if state["intent"] == "knowledge" else "validate"
-
-    @staticmethod
-    def _after_validate(state: AgentState) -> str:
-        return "end" if state["status"] == "clarification" else "resolve"
-
-    @staticmethod
-    def _after_resolve(state: AgentState) -> str:
-        return "analytics" if state["status"] == "resolved" else "end"
-
-    def _build_langgraph(self):
+    def _build_graph(self):
         try:
             from langgraph.graph import END, START, StateGraph
         except ImportError:
             return None
+
         graph = StateGraph(AgentState)
         graph.add_node("extract", self.extract_node)
         graph.add_node("knowledge", self.knowledge_node)
         graph.add_node("validate", self.validate_node)
         graph.add_node("resolve", self.resolve_node)
         graph.add_node("analytics", self.analytics_node)
+
         graph.add_edge(START, "extract")
-        graph.add_conditional_edges("extract", self._after_extract, {"knowledge": "knowledge", "validate": "validate"})
+        graph.add_conditional_edges(
+            "extract",
+            lambda state: state["intent"],
+            {"knowledge": "knowledge", "analytics": "validate"},
+        )
         graph.add_edge("knowledge", END)
-        graph.add_conditional_edges("validate", self._after_validate, {"resolve": "resolve", "end": END})
-        graph.add_conditional_edges("resolve", self._after_resolve, {"analytics": "analytics", "end": END})
+        graph.add_conditional_edges(
+            "validate",
+            lambda state: "resolve" if state["status"] == "validated" else "end",
+            {"resolve": "resolve", "end": END},
+        )
+        graph.add_conditional_edges(
+            "resolve",
+            lambda state: "analytics" if state["status"] == "resolved" else "end",
+            {"analytics": "analytics", "end": END},
+        )
         graph.add_edge("analytics", END)
         return graph.compile()
-
-    def _run_new_question(self, question: str, session_id: str) -> AgentState:
-        state: AgentState = {"question": question, "session_id": session_id}
-        if self._graph is not None:
-            return self._graph.invoke(state)
-        state = self.extract_node(state)
-        if self._after_extract(state) == "knowledge":
-            return self.knowledge_node(state)
-        state = self.validate_node(state)
-        if self._after_validate(state) == "end":
-            return state
-        state = self.resolve_node(state)
-        if self._after_resolve(state) == "end":
-            return state
-        return self.analytics_node(state)
-
-    def _resume_clarification(self, answer: str, previous: AgentState) -> AgentState:
-        result = self.resolver.confirm(
-            previous["pending_entity"],
-            answer,
-            [EntityCandidate(**item) for item in previous.get("candidates", [])],
-            ReservationQuery(**previous["query"]),
-        )
-        state = self._apply_resolution({**previous, "question": answer}, result)
-        if state["status"] == "resolved":
-            state = self.analytics_node(state)
-        return state
-
-    def invoke(self, question: str, session_id: str = "demo-session") -> AgentState:
-        previous = self._sessions.get(session_id)
-        if previous and previous.get("status") == "clarification" and previous.get("pending_entity"):
-            result = self._resume_clarification(question, previous)
-        else:
-            result = self._run_new_question(question, session_id)
-
-        if result.get("status") == "clarification" and result.get("pending_entity"):
-            self._sessions[session_id] = result
-        else:
-            self._sessions.pop(session_id, None)
-        return result

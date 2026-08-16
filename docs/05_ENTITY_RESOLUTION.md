@@ -1,10 +1,25 @@
 # Multilingual Entity Resolution & Stateful Clarification
 
+## Responsibility split
+
+```text
+extractor.py
+    ↓ natural-language entities
+repository.py
+    ↓ governed candidates
+selector.py
+    ↓ resolved / ambiguous / not_found
+resolver.py
+    ↓ final Campaign + Product + Country IDs
+graph.py
+    ↓ clarification memory when needed
+service.py
+    ↓ controlled analytics SQL
+```
+
 ## Why this layer exists
 
-Operations users do not always use warehouse-standard names. They may write in English, Chinese, mixed language, abbreviations, or informal campaign wording.
-
-The application therefore separates **semantic understanding** from **stable ID resolution**.
+Users do not always use warehouse-standard names. The application therefore separates semantic understanding from stable ID resolution.
 
 ```text
 Natural-language question
@@ -24,9 +39,23 @@ Conservative Candidate Selection
 Controlled Analytics SQL
 ```
 
+## Product is optional input
+
+A campaign row already owns `fproduct_id` and `fcountry_code`.
+
+Therefore this request can be resolved:
+
+```text
+Germany + campaign name + reserved_users
+```
+
+The resolver uses country as an optional filter, resolves the campaign, then derives the final product and country IDs from the selected campaign row.
+
+If the user also supplies product, product is resolved first and used to narrow campaign candidates.
+
 ## Safety rule
 
-The LLM may compare the user's wording with governed candidates, but it may select only IDs returned from those dimensions. It does not invent `country_code`, `product_id`, or `campaign_id`.
+The LLM may compare user wording with governed candidates, but it may select only IDs returned from those dimensions. It does not invent `country_code`, `product_id`, or `campaign_id`.
 
 ## Clarification loop
 
@@ -34,10 +63,10 @@ When several candidates remain plausible, the API returns:
 
 - `status = clarification`
 - `pending_entity`
-- the governed candidate list
+- governed candidate list
 - the same `session_id`
 
-The next message with the same `session_id` is treated as the user's confirmation. The agent keeps the previous metric and already-resolved context, then resumes entity resolution and analytics.
+The next message with the same `session_id` is treated as a clarification answer.
 
 ```text
 Candidate ambiguity
@@ -48,9 +77,11 @@ session_id memory
    ↓
 User confirms
    ↓
-Resume resolver
+resolver.confirm()
+   ↓
+normal resolver flow continues
    ↓
 Stable IDs
 ```
 
-The project discussion prototype uses in-process session memory. For multiple production pods, use a durable checkpoint store such as Redis or a database-backed LangGraph checkpoint implementation.
+The current project uses in-process Python memory. That is enough for a single-process demonstration and keeps the implementation easy to read.
