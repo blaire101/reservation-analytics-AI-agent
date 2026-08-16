@@ -31,4 +31,4 @@ Retriever
 Grounded Answer
 ```
 
-`rag.py` loads all `.md` files from `knowledge/`. Local mode uses a deterministic fallback; `LLM_ENABLED=true` activates the complete RAG path.
+`rag.py` loads all `.md` files from `knowledge/`. Local mode uses a deterministic fallback; `OPENAI_API_KEY configured` activates the complete RAG path.

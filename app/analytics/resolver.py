@@ -1,35 +1,74 @@
 from __future__ import annotations
 
-from app.analytics.matcher import CandidateMatcher
+import json
+
 from app.analytics.repository import DimensionRepository
-from app.core.models import EntityCandidate, ReservationQuery, ResolutionResult
+from app.core.models import (
+    EntityCandidate,
+    MatchDecision,
+    ReservationQuery,
+    ResolutionResult,
+)
 from app.data.backend import QueryBackend
 from app.settings import Settings
 
 
+def _build_llm(settings: Settings):
+    """Create the structured LLM used only for governed candidate selection."""
+
+    from langchain_openai import ChatOpenAI
+
+    return ChatOpenAI(
+        model=settings.openai_model,
+        api_key=settings.openai_api_key,
+        temperature=0,
+    ).with_structured_output(MatchDecision)
+
+
 class CampaignResolver:
-    """country? → product? → campaign → stable analytics context"""
+    """
+    Ground user wording to governed IDs.
+
+    Flow:
+        country if supplied
+          → product if supplied
+          → campaign
+          → CampaignContext
+
+    Ambiguous:
+        return candidates → user confirms → continue resolve()
+
+    A campaign may contain many products, so product is optional.
+    """
 
     def __init__(self, backend: QueryBackend, settings: Settings):
+        settings.require_llm()
         self.repo = DimensionRepository(backend)
-        self.matcher = CandidateMatcher(settings)
+        self.llm = _build_llm(settings)
 
     def resolve(self, raw_query: ReservationQuery) -> ResolutionResult:
         query = raw_query.model_copy(deep=True)
 
-        result = self._resolve_optional(
-            query, "country", query.country_code or query.country,
-            self.repo.list_countries(),
-        )
-        if result:
-            return result
-
-        result = self._resolve_optional(
-            query, "product", query.product_id or query.product,
-            self.repo.list_products(),
-        )
-        if result:
-            return result
+        for entity_type, mention, candidates in (
+            (
+                "country",
+                query.country_code or query.country,
+                self.repo.list_countries(),
+            ),
+            (
+                "product",
+                query.product_id or query.product,
+                self.repo.list_products(),
+            ),
+        ):
+            pending = self._resolve_optional(
+                query,
+                entity_type,
+                mention,
+                candidates,
+            )
+            if pending:
+                return pending
 
         return self._resolve_campaign(query)
 
@@ -40,6 +79,8 @@ class CampaignResolver:
         candidates: list[EntityCandidate],
         raw_query: ReservationQuery,
     ) -> ResolutionResult:
+        """Resolve one clarification reply, then continue the normal flow."""
+
         query = raw_query.model_copy(deep=True)
 
         if user_answer.strip().isdigit():
@@ -48,11 +89,11 @@ class CampaignResolver:
                 self._set(query, entity_type, candidates[index])
                 return self.resolve(query)
 
-        candidate = self._choose(entity_type, user_answer, candidates, query)
-        if isinstance(candidate, ResolutionResult):
-            return candidate
+        chosen = self._choose(entity_type, user_answer, candidates, query)
+        if isinstance(chosen, ResolutionResult):
+            return chosen
 
-        self._set(query, entity_type, candidate)
+        self._set(query, entity_type, chosen)
         return self.resolve(query)
 
     def _resolve_optional(
@@ -65,11 +106,11 @@ class CampaignResolver:
         if not mention:
             return None
 
-        candidate = self._choose(entity_type, mention, candidates, query)
-        if isinstance(candidate, ResolutionResult):
-            return candidate
+        chosen = self._choose(entity_type, mention, candidates, query)
+        if isinstance(chosen, ResolutionResult):
+            return chosen
 
-        self._set(query, entity_type, candidate)
+        self._set(query, entity_type, chosen)
         return None
 
     def _resolve_campaign(self, query: ReservationQuery) -> ResolutionResult:
@@ -102,7 +143,6 @@ class CampaignResolver:
                 "Campaign context is still ambiguous. Please provide country.",
             )
 
-        # Important: do NOT invent or derive one product when a campaign has many.
         query.country_code = context.country_code
         query.country = context.country_name
 
@@ -119,13 +159,41 @@ class CampaignResolver:
         candidates: list[EntityCandidate],
         query: ReservationQuery,
     ) -> EntityCandidate | ResolutionResult:
-        match = self.matcher.match(entity_type, mention, candidates)
-        by_id = {c.entity_id: c for c in candidates}
+        """LLM can choose only IDs returned by governed dimensions."""
 
-        if match.selected_id in by_id:
-            return by_id[match.selected_id]
+        if not candidates:
+            return self._not_found(
+                query,
+                f"No governed {entity_type} candidates were found.",
+            )
 
-        choices = [by_id[x] for x in match.candidate_ids if x in by_id]
+        allowed = [item.model_dump() for item in candidates[:100]]
+        decision = self.llm.invoke(
+            f"""
+Match this {entity_type}.
+
+User wording:
+{mention}
+
+Allowed candidates:
+{json.dumps(allowed, ensure_ascii=False)}
+
+Return selected_id only when one candidate is clear.
+Otherwise return plausible candidate_ids.
+Never invent an ID.
+""".strip()
+        )
+
+        by_id = {item.entity_id: item for item in candidates}
+
+        if decision.selected_id in by_id:
+            return by_id[decision.selected_id]
+
+        choices = [
+            by_id[item]
+            for item in decision.candidate_ids
+            if item in by_id
+        ]
         if choices:
             return self._clarify(query, entity_type, choices)
 
@@ -155,8 +223,8 @@ class CampaignResolver:
     ) -> ResolutionResult:
         candidates = candidates[:8]
         choices = "; ".join(
-            f"{i}. {c.entity_id} — {c.name}"
-            for i, c in enumerate(candidates, start=1)
+            f"{i}. {item.entity_id} — {item.name}"
+            for i, item in enumerate(candidates, start=1)
         )
         return ResolutionResult(
             status="clarification",

@@ -7,7 +7,7 @@ extractor.py
     ↓ natural-language entities
 repository.py
     ↓ governed candidates
-matcher.py
+resolver.py
     ↓ resolved / ambiguous / not_found
 resolver.py
     ↓ final Campaign + Product + Country IDs

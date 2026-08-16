@@ -1,74 +1,71 @@
-# App Code Map
+# App Code Map — Slim Version
 
-Read the project in this order:
+## Main flow
 
 ```text
-1. core/graph.py
-   whole workflow
-
-2. core/extractor.py
-   question → typed request
-
-3. analytics/resolver.py
-   wording → governed context
-
-4. analytics/matcher.py
-   exact / partial / optional LLM match
-
-5. analytics/repository.py
-   dimension SQL
-
-6. analytics/service.py
-   controlled Data Mart SQL
+User
+  ↓
+extractor.py
+  LLM → typed request
+  ↓
+graph.py
+  route workflow
+  ↓
+resolver.py
+  dimensions → governed IDs
+  ↓
+service.py
+  controlled SQL
+  ↓
+Reservation Data Mart
 ```
 
-## One important business rule
+Knowledge questions branch from `graph.py` to `knowledge/rag.py`.
+
+## Read only these four files first
+
+1. `core/graph.py` — whole workflow
+2. `core/extractor.py` — LLM structured extraction
+3. `analytics/resolver.py` — entity resolution + clarification
+4. `analytics/service.py` — controlled Data Mart SQL
+
+Then, only if needed:
+
+- `analytics/repository.py` = dimension SQL
+- `core/session.py` = `{session_id: pending state}`
+- `core/models.py` = typed contracts
+
+## Multi-turn clarification
+
+```text
+resolver finds several candidates
+    ↓
+return clarification
+    ↓
+graph saves candidates by session_id
+    ↓
+user replies "1" or "CMP001"
+    ↓
+resolver.confirm()
+    ↓
+continue resolve()
+    ↓
+analytics
+```
+
+## LLM policy
+
+The LLM is a required dependency.
+
+There is no second keyword/offline implementation.
+If the LLM is unavailable, `/ask` returns `status="unavailable"` clearly.
+
+The LLM understands language, but it may only select entity IDs returned by
+governed dimension tables. Controlled analytics SQL remains application code.
+
+## Multi-product campaign rule
 
 A campaign can contain multiple products.
 
-Therefore:
-
-```text
-"CMP001 in Germany"
-  → campaign-level analytics
-  → all products in CMP001
-
-"CMP001 + Mi 17 Pro in Germany"
-  → product-level analytics
-  → only P001
-```
-
-The resolver never forces one product when the user did not provide one.
-
-## Entity resolution
-
-```text
-user wording
-  ↓
-governed candidates from dimensions
-  ↓
-exact match
-  ↓
-unique partial match
-  ↓
-optional LLM fallback
-  ↓
-ambiguous? ask the user
-```
-
-The LLM can only choose IDs returned by the dimension tables.
-
-## Clarification loop
-
-```text
-first message
-  → several candidates
-  → save candidates under session_id
-
-next message
-  → resolver.confirm(...)
-  → continue normal resolve(...)
-  → controlled analytics SQL
-```
-
-Prototype session state is stored in Python process memory.
+- Campaign only → aggregate all products.
+- Campaign + product → add `product_id` as a filter.

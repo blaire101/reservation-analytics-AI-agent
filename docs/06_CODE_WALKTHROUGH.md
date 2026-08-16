@@ -39,7 +39,7 @@ country if supplied
 -> final stable IDs
 ```
 
-Candidate SQL is in `repository.py`. Matching logic is in `matcher.py`.
+Candidate SQL is in `repository.py`. Matching logic is in `resolver.py`.
 
 ### `service.py`
 Owns controlled analytics only:

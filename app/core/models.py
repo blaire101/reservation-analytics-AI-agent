@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class ReservationQuery(BaseModel):
-    """Business wording extracted from the user and enriched by the resolver."""
+    """Business wording extracted from the user."""
 
     country: str | None = None
     country_code: str | None = None
@@ -19,19 +19,44 @@ class ReservationQuery(BaseModel):
     campaign_month: int | None = None
     campaign_year: int | None = None
 
+    def has_business_context(self) -> bool:
+        """Return True when the user supplied at least one business clue."""
+
+        return any(
+            value is not None
+            for value in (
+                self.country,
+                self.country_code,
+                self.product,
+                self.product_id,
+                self.campaign_id,
+                self.campaign_name,
+                self.campaign_month,
+                self.campaign_year,
+            )
+        )
+
 
 class ExtractedRequest(BaseModel):
+    """Structured output produced by the LLM."""
+
     intent: Literal["knowledge", "analytics"]
-    metric: str = "summary"
+    metric: Literal[
+        "summary",
+        "reserved_users",
+        "ordered_users",
+        "reserved_not_ordered",
+        "conversion_rate",
+    ] = "summary"
     detail_requested: bool = False
     query: ReservationQuery = Field(default_factory=ReservationQuery)
 
 
 class CampaignContext(BaseModel):
-    """Stable context used by analytics.
+    """Stable context passed to controlled analytics SQL.
 
-    A campaign may contain many products, so product_id is optional.
-    If product_id is None, analytics aggregates all products in the campaign.
+    A campaign may contain many products.
+    product_id=None means campaign-level analytics across all products.
     """
 
     campaign_id: str
@@ -43,9 +68,18 @@ class CampaignContext(BaseModel):
 
 
 class EntityCandidate(BaseModel):
+    """One governed candidate returned by a dimension table."""
+
     entity_id: str
     name: str
     description: str = ""
+
+
+class MatchDecision(BaseModel):
+    """LLM decision restricted to governed candidate IDs."""
+
+    selected_id: str | None = None
+    candidate_ids: list[str] = Field(default_factory=list)
 
 
 class ResolutionResult(BaseModel):
@@ -58,6 +92,8 @@ class ResolutionResult(BaseModel):
 
 
 class AgentState(TypedDict, total=False):
+    """Shared LangGraph state."""
+
     question: str
     session_id: str
 
