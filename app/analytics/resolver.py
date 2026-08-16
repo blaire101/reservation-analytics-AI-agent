@@ -325,12 +325,20 @@ Rules:
             for index, candidate in enumerate(candidates, start=1)
         )
 
+        message = f"Please choose {entity_type}: {choices}"
+
+        if (entity_type == "campaign" and not query.campaign_year and not query.campaign_month):
+            message += (
+                " I searched campaigns from the last two years "
+                "because no time range was specified."
+            )
+
         return ResolutionResult(
             status="clarification",
             query=query,
             pending_entity=entity_type,
             candidates=candidates,
-            message=f"Please choose {entity_type}: {choices}",
+            message=message,
         )
 
     @staticmethod

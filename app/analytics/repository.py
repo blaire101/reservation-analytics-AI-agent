@@ -102,12 +102,21 @@ class DimensionRepository:
             )
 
         # Optional time filters
+        # Default time window
+        if not query.campaign_year and not query.campaign_month:
+            cutoff_year = date.today().year - 2
+            filters.append(
+                f"substr(c.fstart_time, 1, 4) >= '{cutoff_year}'"
+            )
+
+        # User-specified year
         if query.campaign_year:
             filters.append(
                 "substr(c.fstart_time, 1, 4) = "
                 f"{sql_string(str(query.campaign_year))}"
             )
 
+        # User-specified month
         if query.campaign_month:
             month = f"{query.campaign_month:02d}"
 

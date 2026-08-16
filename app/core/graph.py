@@ -81,10 +81,17 @@ class ReservationAgent:
             → start a new LangGraph workflow
         """
 
-        previous = self.sessions.get(session_id)
+        previous = self.sessions.get(session_id)  # AgentState
+        """
+        previous = {
+            "status": "clarification",
+            "pending_entity": "campaign",
+            "candidates": ["CMP001", "CMP002"]
+        }
+        """
 
         if self._is_waiting(previous):
-            result = self._resume(
+            result = self._resume(  #  continue the previous clarification flow.
                 user_answer=question,
                 previous=previous,
             )
