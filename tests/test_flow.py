@@ -34,15 +34,16 @@ def test_reserved_users():
     assert "8 reserved users" in result["answer"]
 
 
-def test_campaign_id_can_derive_product_when_product_is_missing():
+def test_campaign_without_product_aggregates_all_products():
     result = build_agent().invoke(
         "How many users reserved in Germany for CMP001?"
     )
     assert result["status"] == "answered"
-    assert "8 reserved users" in result["answer"]
+    assert "9 reserved users" in result["answer"]
 
 
-def test_campaign_name_can_derive_product_when_product_is_missing():
+
+def test_campaign_name_does_not_force_one_product():
     settings = build_settings()
     backend = create_backend(settings)
     resolver = CampaignResolver(backend, settings)
@@ -50,15 +51,15 @@ def test_campaign_name_can_derive_product_when_product_is_missing():
     result = resolver.resolve(
         ReservationQuery(
             country="Germany",
-            campaign_name="Phone Mi 17 Pro Launch",
+            campaign_name="Mi 17 Launch",
         )
     )
 
     assert result.status == "resolved"
-    assert result.campaign is not None
-    assert result.campaign.campaign_id == "CMP001"
-    assert result.query.product_id == "P001"
-
+    assert result.context is not None
+    assert result.context.campaign_id == "CMP001"
+    assert result.context.product_id is None
+    assert result.query.product_id is None
 
 
 def test_country_and_product_without_campaign_returns_governed_campaign_choices():
@@ -79,8 +80,8 @@ def test_product_whitespace_normalization():
     result = build_agent().invoke(
         "How many users reserved Mi     17 in Germany for CMP001?"
     )
-    # CMP001 belongs to the Pro product, so the base model must not be silently upgraded.
-    assert result["status"] in {"clarification", "not_found"}
+    assert result["status"] == "answered"
+    assert "1 reserved users" in result["answer"]
 
 
 def test_conversion_rate():

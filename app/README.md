@@ -1,96 +1,74 @@
-# Application Code Map
+# App Code Map
 
-The application is intentionally split by responsibility so each file answers one question.
-
-```text
-app/
-├── main.py                    # HTTP API only
-├── settings.py                # Configuration only
-├── core/
-│   ├── models.py              # Shared Pydantic / state models
-│   ├── extractor.py           # Question -> typed request
-│   ├── validation.py          # Is there enough campaign context?
-│   ├── session.py             # In-process clarification state
-│   └── graph.py               # LangGraph orchestration
-├── analytics/
-│   ├── repository.py          # Read governed dimension candidates
-│   ├── selector.py            # Match user wording to candidates
-│   ├── resolver.py            # Country -> Product(optional) -> Campaign
-│   ├── service.py             # Controlled analytics SQL
-│   └── sql_utils.py           # Small SQL helper
-├── knowledge/
-│   └── rag.py                 # LlamaIndex + FAISS knowledge path
-└── data/
-    ├── backend.py             # QueryBackend interface + factory
-    ├── sqlite.py              # Local implementation
-    └── remote.py              # Athena / SQL Gateway implementations
-```
-
-## Read the project in this order
-
-### 1. Main business flow
-
-Read only these first:
+Read the project in this order:
 
 ```text
-core/graph.py
-  -> core/extractor.py
-  -> analytics/resolver.py
-  -> analytics/service.py
+1. core/graph.py
+   whole workflow
+
+2. core/extractor.py
+   question → typed request
+
+3. analytics/resolver.py
+   wording → governed context
+
+4. analytics/matcher.py
+   exact / partial / optional LLM match
+
+5. analytics/repository.py
+   dimension SQL
+
+6. analytics/service.py
+   controlled Data Mart SQL
 ```
 
-That is enough to explain the end-to-end behavior.
+## One important business rule
 
-### 2. Understand entity resolution
+A campaign can contain multiple products.
 
-Then read:
+Therefore:
 
 ```text
-analytics/repository.py
-  -> analytics/selector.py
+"CMP001 in Germany"
+  → campaign-level analytics
+  → all products in CMP001
+
+"CMP001 + Mi 17 Pro in Germany"
+  → product-level analytics
+  → only P001
 ```
 
-- `repository.py` answers: **where do candidate IDs come from?**
-- `selector.py` answers: **how do we choose one candidate safely?**
-- `resolver.py` answers: **what order do we resolve business context in?**
+The resolver never forces one product when the user did not provide one.
 
-### 3. Understand session memory
-
-Read:
+## Entity resolution
 
 ```text
-core/session.py
+user wording
+  ↓
+governed candidates from dimensions
+  ↓
+exact match
+  ↓
+unique partial match
+  ↓
+optional LLM fallback
+  ↓
+ambiguous? ask the user
 ```
 
-It stores only pending clarification state by `session_id`.
+The LLM can only choose IDs returned by the dimension tables.
 
-## Analytics resolution flow
+## Clarification loop
 
 ```text
-ReservationQuery
-      ↓
-Resolve country if supplied
-      ↓
-Resolve product if supplied
-      ↓
-Query campaign candidates
-      ↓
-Unique campaign?
-  ├─ yes -> load Campaign
-  └─ no  -> clarification
-              ↓
-         session memory
-              ↓
-         user confirms
-              ↓
-         resolver continues
-      ↓
-Campaign supplies final:
-country_code + product_id + campaign_id
-      ↓
-AnalyticsService
-      ↓
-Data Mart
+first message
+  → several candidates
+  → save candidates under session_id
+
+next message
+  → resolver.confirm(...)
+  → continue normal resolve(...)
+  → controlled analytics SQL
 ```
 
-A user does **not** have to provide product when the campaign can determine it uniquely.
+Prototype session state is stored in Python process memory.

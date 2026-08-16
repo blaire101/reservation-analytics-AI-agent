@@ -1,58 +1,37 @@
 from __future__ import annotations
 
+from app.analytics.matcher import CandidateMatcher
 from app.analytics.repository import DimensionRepository
-from app.analytics.selector import CandidateSelector
 from app.core.models import EntityCandidate, ReservationQuery, ResolutionResult
 from app.data.backend import QueryBackend
 from app.settings import Settings
 
 
 class CampaignResolver:
-    """Turn user wording into one governed Campaign + Product + Country context.
-
-    Read this file as the business flow:
-    1. Resolve country only when the user supplied one.
-    2. Resolve product only when the user supplied one.
-    3. Resolve the campaign using those optional filters plus time/name.
-    4. Load the chosen campaign and derive any missing product/country IDs.
-    """
+    """country? → product? → campaign → stable analytics context"""
 
     def __init__(self, backend: QueryBackend, settings: Settings):
-        self.repository = DimensionRepository(backend)
-        self.selector = CandidateSelector(settings)
+        self.repo = DimensionRepository(backend)
+        self.matcher = CandidateMatcher(settings)
 
     def resolve(self, raw_query: ReservationQuery) -> ResolutionResult:
         query = raw_query.model_copy(deep=True)
 
-        country_result = self._resolve_optional_country(query)
-        if country_result:
-            return country_result
+        result = self._resolve_optional(
+            query, "country", query.country_code or query.country,
+            self.repo.list_countries(),
+        )
+        if result:
+            return result
 
-        product_result = self._resolve_optional_product(query)
-        if product_result:
-            return product_result
+        result = self._resolve_optional(
+            query, "product", query.product_id or query.product,
+            self.repo.list_products(),
+        )
+        if result:
+            return result
 
-        campaign_result = self._resolve_campaign(query)
-        if isinstance(campaign_result, ResolutionResult):
-            return campaign_result
-
-        campaign = self.repository.get_campaign(campaign_result)
-        if campaign is None:
-            return ResolutionResult(
-                status="not_found",
-                query=query,
-                message=f"Campaign {campaign_result!r} was not found.",
-            )
-
-        # The campaign dimension is authoritative for the final business context.
-        query.campaign_id = campaign.campaign_id
-        query.campaign_name = campaign.campaign_name
-        query.product_id = campaign.product_id
-        query.product = campaign.product_name
-        query.country_code = campaign.country_code
-        query.country = campaign.country_name
-
-        return ResolutionResult(status="resolved", query=query, campaign=campaign)
+        return self._resolve_campaign(query)
 
     def confirm(
         self,
@@ -61,176 +40,139 @@ class CampaignResolver:
         candidates: list[EntityCandidate],
         raw_query: ReservationQuery,
     ) -> ResolutionResult:
-        """Apply one clarification answer, then continue normal resolution."""
-
         query = raw_query.model_copy(deep=True)
-        selected = self._select_candidate(
-            entity_type,
-            user_answer,
-            candidates,
-            query,
-            allow_choice_number=True,
-        )
-        if isinstance(selected, ResolutionResult):
-            return selected
 
-        entity_id, canonical_name = selected
-        if entity_type == "country":
-            query.country_code, query.country = entity_id, canonical_name
-        elif entity_type == "product":
-            query.product_id, query.product = entity_id, canonical_name
-        else:
-            query.campaign_id, query.campaign_name = entity_id, canonical_name
+        if user_answer.strip().isdigit():
+            index = int(user_answer.strip()) - 1
+            if 0 <= index < len(candidates):
+                self._set(query, entity_type, candidates[index])
+                return self.resolve(query)
 
+        candidate = self._choose(entity_type, user_answer, candidates, query)
+        if isinstance(candidate, ResolutionResult):
+            return candidate
+
+        self._set(query, entity_type, candidate)
         return self.resolve(query)
 
-    def _resolve_optional_country(
+    def _resolve_optional(
         self,
         query: ReservationQuery,
+        entity_type: str,
+        mention: str | None,
+        candidates: list[EntityCandidate],
     ) -> ResolutionResult | None:
-        mention = query.country_code or query.country
         if not mention:
             return None
 
-        result = self._select_candidate(
-            "country",
-            mention,
-            self.repository.list_countries(),
-            query,
-        )
-        if isinstance(result, ResolutionResult):
-            return result
+        candidate = self._choose(entity_type, mention, candidates, query)
+        if isinstance(candidate, ResolutionResult):
+            return candidate
 
-        query.country_code, query.country = result
+        self._set(query, entity_type, candidate)
         return None
 
-    def _resolve_optional_product(
-        self,
-        query: ReservationQuery,
-    ) -> ResolutionResult | None:
-        mention = query.product_id or query.product
-        if not mention:
-            return None
-
-        result = self._select_candidate(
-            "product",
-            mention,
-            self.repository.list_products(),
-            query,
-        )
-        if isinstance(result, ResolutionResult):
-            return result
-
-        query.product_id, query.product = result
-        return None
-
-    def _resolve_campaign(
-        self,
-        query: ReservationQuery,
-    ) -> str | ResolutionResult:
-        candidates = self.repository.list_campaigns(query)
+    def _resolve_campaign(self, query: ReservationQuery) -> ResolutionResult:
+        candidates = self.repo.list_campaigns(query)
         if not candidates:
-            return ResolutionResult(
-                status="not_found",
-                query=query,
-                message="No campaign matched the supplied business context.",
-            )
+            return self._not_found(query, "No campaign matched this context.")
 
         mention = query.campaign_id or query.campaign_name
+
         if mention:
-            result = self._select_candidate(
-                "campaign",
-                mention,
-                candidates,
+            chosen = self._choose("campaign", mention, candidates, query)
+            if isinstance(chosen, ResolutionResult):
+                return chosen
+        elif len(candidates) == 1:
+            chosen = candidates[0]
+        else:
+            return self._clarify(query, "campaign", candidates)
+
+        query.campaign_id = chosen.entity_id
+        query.campaign_name = chosen.name
+
+        context = self.repo.get_context(
+            campaign_id=chosen.entity_id,
+            country_code=query.country_code,
+            product_id=query.product_id,
+        )
+        if context is None:
+            return self._not_found(
                 query,
+                "Campaign context is still ambiguous. Please provide country.",
             )
-            if isinstance(result, ResolutionResult):
-                return result
-            campaign_id, _ = result
-            return campaign_id
 
-        if len(candidates) == 1:
-            return candidates[0].entity_id
+        # Important: do NOT invent or derive one product when a campaign has many.
+        query.country_code = context.country_code
+        query.country = context.country_name
 
-        return self._clarification(
-            entity_type="campaign",
-            mention="the supplied time/context",
-            candidates=candidates[:8],
+        return ResolutionResult(
+            status="resolved",
             query=query,
+            context=context,
         )
 
-    def _select_candidate(
+    def _choose(
         self,
         entity_type: str,
         mention: str,
         candidates: list[EntityCandidate],
         query: ReservationQuery,
-        allow_choice_number: bool = False,
-    ) -> tuple[str, str] | ResolutionResult:
-        if allow_choice_number:
-            numbered_choice = self._numbered_choice(mention, candidates)
-            if numbered_choice:
-                return numbered_choice.entity_id, numbered_choice.name
+    ) -> EntityCandidate | ResolutionResult:
+        match = self.matcher.match(entity_type, mention, candidates)
+        by_id = {c.entity_id: c for c in candidates}
 
-        selection = self.selector.select(entity_type, mention, candidates)
-        candidates_by_id = {
-            candidate.entity_id: candidate for candidate in candidates
-        }
+        if match.selected_id in by_id:
+            return by_id[match.selected_id]
 
-        if selection.status == "resolved" and selection.selected_id in candidates_by_id:
-            candidate = candidates_by_id[selection.selected_id]
-            return candidate.entity_id, candidate.name
+        choices = [by_id[x] for x in match.candidate_ids if x in by_id]
+        if choices:
+            return self._clarify(query, entity_type, choices)
 
-        if selection.status == "not_found":
-            return ResolutionResult(
-                status="not_found",
-                query=query,
-                message=f"No governed {entity_type} matched {mention!r}.",
-            )
-
-        plausible = [
-            candidates_by_id[candidate_id]
-            for candidate_id in selection.candidate_ids
-            if candidate_id in candidates_by_id
-        ]
-        return self._clarification(
-            entity_type=entity_type,
-            mention=mention,
-            candidates=plausible or candidates[:8],
-            query=query,
+        return self._not_found(
+            query,
+            f"No governed {entity_type} matched {mention!r}.",
         )
 
     @staticmethod
-    def _numbered_choice(
-        answer: str,
-        candidates: list[EntityCandidate],
-    ) -> EntityCandidate | None:
-        value = answer.strip()
-        if not value.isdigit():
-            return None
-        index = int(value) - 1
-        if 0 <= index < len(candidates):
-            return candidates[index]
-        return None
+    def _set(
+        query: ReservationQuery,
+        entity_type: str,
+        candidate: EntityCandidate,
+    ) -> None:
+        if entity_type == "country":
+            query.country_code, query.country = candidate.entity_id, candidate.name
+        elif entity_type == "product":
+            query.product_id, query.product = candidate.entity_id, candidate.name
+        else:
+            query.campaign_id, query.campaign_name = candidate.entity_id, candidate.name
 
     @staticmethod
-    def _clarification(
-        entity_type: str,
-        mention: str,
-        candidates: list[EntityCandidate],
+    def _clarify(
         query: ReservationQuery,
+        entity_type: str,
+        candidates: list[EntityCandidate],
     ) -> ResolutionResult:
+        candidates = candidates[:8]
         choices = "; ".join(
-            f"{index}. {candidate.entity_id} — {candidate.name}"
-            for index, candidate in enumerate(candidates[:8], start=1)
+            f"{i}. {c.entity_id} — {c.name}"
+            for i, c in enumerate(candidates, start=1)
         )
         return ResolutionResult(
             status="clarification",
             query=query,
             pending_entity=entity_type,
-            candidates=candidates[:8],
-            message=(
-                f"I could not safely resolve {entity_type} {mention!r}. "
-                f"Please choose: {choices}"
-            ),
+            candidates=candidates,
+            message=f"Please choose {entity_type}: {choices}",
+        )
+
+    @staticmethod
+    def _not_found(
+        query: ReservationQuery,
+        message: str,
+    ) -> ResolutionResult:
+        return ResolutionResult(
+            status="not_found",
+            query=query,
+            message=message,
         )

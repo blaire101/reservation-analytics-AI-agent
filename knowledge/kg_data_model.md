@@ -73,8 +73,8 @@ This document describes the core warehouse tables used by the Reservation Analyt
 
 | fcampaign_id | fcampaign_group_id | fcampaign_name | fproduct_id | fcountry_code | fcampaign_status |
 |---|---|---|---|---|---:|
-| `CMP001` | `CG001` | Phone Mi 17 Pro Launch | `P001` | `DE` | 2 |
-| `CMP002` | `CG001` | Phone Mi 17 Pro Launch | `P001` | `SG` | 2 |
+| `CMP001` | `CG001` | Mi 17 Launch | `P001` | `DE` | 2 |
+| `CMP002` | `CG001` | Mi 17 Launch | `P001` | `SG` | 2 |
 
 ---
 
