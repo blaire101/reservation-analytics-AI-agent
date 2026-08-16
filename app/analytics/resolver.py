@@ -14,7 +14,7 @@ from app.settings import Settings
 
 
 def _build_llm(settings: Settings):
-    """Create the structured LLM used only for governed candidate selection."""
+    """Create the LLM used to select from governed entity candidates."""
 
     from langchain_openai import ChatOpenAI
 
@@ -27,18 +27,20 @@ def _build_llm(settings: Settings):
 
 class CampaignResolver:
     """
-    Ground user wording to governed IDs.
+    Convert user wording into governed business IDs.
 
-    Flow:
-        country if supplied
-          → product if supplied
-          → campaign
-          → CampaignContext
+    Main flow:
+        1. Resolve country, if supplied
+        2. Resolve product, if supplied
+        3. Resolve campaign
+        4. Build CampaignContext
 
-    Ambiguous:
-        return candidates → user confirms → continue resolve()
+    If several candidates are possible:
+        → ask the user to clarify
+        → save candidates in session memory
+        → continue with confirm()
 
-    A campaign may contain many products, so product is optional.
+    Product is optional because one campaign can contain multiple products.
     """
 
     def __init__(self, backend: QueryBackend, settings: Settings):
@@ -47,29 +49,31 @@ class CampaignResolver:
         self.llm = _build_llm(settings)
 
     def resolve(self, raw_query: ReservationQuery) -> ResolutionResult:
+        """Resolve country → product → campaign."""
+
         query = raw_query.model_copy(deep=True)
 
-        for entity_type, mention, candidates in (
-            (
-                "country",
-                query.country_code or query.country,
-                self.repo.list_countries(),
-            ),
-            (
-                "product",
-                query.product_id or query.product,
-                self.repo.list_products(),
-            ),
-        ):
-            pending = self._resolve_optional(
-                query,
-                entity_type,
-                mention,
-                candidates,
-            )
-            if pending:
-                return pending
+        # 1. Country
+        country_result = self._resolve_optional(
+            query=query,
+            entity_type="country",
+            mention=query.country_code or query.country,
+            candidates=self.repo.list_countries(),
+        )
+        if country_result:
+            return country_result
 
+        # 2. Product
+        product_result = self._resolve_optional(
+            query=query,
+            entity_type="product",
+            mention=query.product_id or query.product,
+            candidates=self.repo.list_products(),
+        )
+        if product_result:
+            return product_result
+
+        # 3. Campaign
         return self._resolve_campaign(query)
 
     def confirm(
@@ -79,21 +83,43 @@ class CampaignResolver:
         candidates: list[EntityCandidate],
         raw_query: ReservationQuery,
     ) -> ResolutionResult:
-        """Resolve one clarification reply, then continue the normal flow."""
+        """
+        Handle a clarification reply.
+
+        Example:
+            Agent: Please choose campaign: 1. CMP001, 2. CMP002
+            User:  1
+            → set CMP001
+            → continue resolve()
+        """
 
         query = raw_query.model_copy(deep=True)
 
+        # A user can reply with a simple number such as "1".
         if user_answer.strip().isdigit():
             index = int(user_answer.strip()) - 1
+
             if 0 <= index < len(candidates):
-                self._set(query, entity_type, candidates[index])
+                self._set_entity(
+                    query,
+                    entity_type,
+                    candidates[index],
+                )
                 return self.resolve(query)
 
-        chosen = self._choose(entity_type, user_answer, candidates, query)
+        # Otherwise, ask the LLM to interpret the reply
+        # using only the previously saved candidates.
+        chosen = self._choose_candidate(
+            entity_type=entity_type,
+            mention=user_answer,
+            candidates=candidates,
+            query=query,
+        )
+
         if isinstance(chosen, ResolutionResult):
             return chosen
 
-        self._set(query, entity_type, chosen)
+        self._set_entity(query, entity_type, chosen)
         return self.resolve(query)
 
     def _resolve_optional(
@@ -103,40 +129,74 @@ class CampaignResolver:
         mention: str | None,
         candidates: list[EntityCandidate],
     ) -> ResolutionResult | None:
+        """Resolve country/product only when the user supplied one."""
+
         if not mention:
             return None
 
-        chosen = self._choose(entity_type, mention, candidates, query)
+        chosen = self._choose_candidate(
+            entity_type=entity_type,
+            mention=mention,
+            candidates=candidates,
+            query=query,
+        )
+
         if isinstance(chosen, ResolutionResult):
             return chosen
 
-        self._set(query, entity_type, chosen)
+        self._set_entity(query, entity_type, chosen)
         return None
 
-    def _resolve_campaign(self, query: ReservationQuery) -> ResolutionResult:
+    def _resolve_campaign(
+        self,
+        query: ReservationQuery,
+    ) -> ResolutionResult:
+        """Resolve the campaign after known filters are already grounded."""
+
         candidates = self.repo.list_campaigns(query)
+
         if not candidates:
-            return self._not_found(query, "No campaign matched this context.")
+            return self._not_found(
+                query,
+                "No campaign matched this context.",
+            )
 
         mention = query.campaign_id or query.campaign_name
 
+        # User supplied campaign wording / ID.
         if mention:
-            chosen = self._choose("campaign", mention, candidates, query)
+            chosen = self._choose_candidate(
+                entity_type="campaign",
+                mention=mention,
+                candidates=candidates,
+                query=query,
+            )
+
             if isinstance(chosen, ResolutionResult):
                 return chosen
+
+        # No campaign wording, but filtering left exactly one campaign.
         elif len(candidates) == 1:
             chosen = candidates[0]
+
+        # Several campaigns remain, so ask instead of guessing.
         else:
-            return self._clarify(query, "campaign", candidates)
+            return self._clarify(
+                query,
+                "campaign",
+                candidates,
+            )
 
         query.campaign_id = chosen.entity_id
         query.campaign_name = chosen.name
 
+        # Build the final stable context used by AnalyticsService.
         context = self.repo.get_context(
             campaign_id=chosen.entity_id,
             country_code=query.country_code,
             product_id=query.product_id,
         )
+
         if context is None:
             return self._not_found(
                 query,
@@ -152,14 +212,25 @@ class CampaignResolver:
             context=context,
         )
 
-    def _choose(
+    def _choose_candidate(
         self,
         entity_type: str,
         mention: str,
         candidates: list[EntityCandidate],
         query: ReservationQuery,
     ) -> EntityCandidate | ResolutionResult:
-        """LLM can choose only IDs returned by governed dimensions."""
+        """
+        Ask the LLM to choose only from governed candidates.
+
+        One clear candidate:
+            → return EntityCandidate
+
+        Several plausible candidates:
+            → return clarification
+
+        No valid candidate:
+            → return not_found
+        """
 
         if not candidates:
             return self._not_found(
@@ -167,7 +238,11 @@ class CampaignResolver:
                 f"No governed {entity_type} candidates were found.",
             )
 
-        allowed = [item.model_dump() for item in candidates[:100]]
+        allowed = [
+            candidate.model_dump()
+            for candidate in candidates[:100]
+        ]
+
         decision = self.llm.invoke(
             f"""
 Match this {entity_type}.
@@ -178,24 +253,37 @@ User wording:
 Allowed candidates:
 {json.dumps(allowed, ensure_ascii=False)}
 
-Return selected_id only when one candidate is clear.
-Otherwise return plausible candidate_ids.
-Never invent an ID.
+Rules:
+- Select only from Allowed candidates.
+- Never invent an ID.
+- If one candidate is clear, return selected_id.
+- If several candidates are plausible, leave selected_id empty
+  and return candidate_ids.
 """.strip()
         )
 
-        by_id = {item.entity_id: item for item in candidates}
+        candidates_by_id = {
+            candidate.entity_id: candidate
+            for candidate in candidates
+        }
 
-        if decision.selected_id in by_id:
-            return by_id[decision.selected_id]
+        # Unique match.
+        if decision.selected_id in candidates_by_id:
+            return candidates_by_id[decision.selected_id]
 
-        choices = [
-            by_id[item]
-            for item in decision.candidate_ids
-            if item in by_id
+        # Ambiguous match.
+        plausible_candidates = [
+            candidates_by_id[candidate_id]
+            for candidate_id in decision.candidate_ids
+            if candidate_id in candidates_by_id
         ]
-        if choices:
-            return self._clarify(query, entity_type, choices)
+
+        if plausible_candidates:
+            return self._clarify(
+                query,
+                entity_type,
+                plausible_candidates,
+            )
 
         return self._not_found(
             query,
@@ -203,17 +291,24 @@ Never invent an ID.
         )
 
     @staticmethod
-    def _set(
+    def _set_entity(
         query: ReservationQuery,
         entity_type: str,
         candidate: EntityCandidate,
     ) -> None:
+        """Write one resolved ID and name back into ReservationQuery."""
+
         if entity_type == "country":
-            query.country_code, query.country = candidate.entity_id, candidate.name
+            query.country_code = candidate.entity_id
+            query.country = candidate.name
+
         elif entity_type == "product":
-            query.product_id, query.product = candidate.entity_id, candidate.name
+            query.product_id = candidate.entity_id
+            query.product = candidate.name
+
         else:
-            query.campaign_id, query.campaign_name = candidate.entity_id, candidate.name
+            query.campaign_id = candidate.entity_id
+            query.campaign_name = candidate.name
 
     @staticmethod
     def _clarify(
@@ -221,11 +316,15 @@ Never invent an ID.
         entity_type: str,
         candidates: list[EntityCandidate],
     ) -> ResolutionResult:
+        """Return candidate choices instead of guessing."""
+
         candidates = candidates[:8]
+
         choices = "; ".join(
-            f"{i}. {item.entity_id} — {item.name}"
-            for i, item in enumerate(candidates, start=1)
+            f"{index}. {candidate.entity_id} — {candidate.name}"
+            for index, candidate in enumerate(candidates, start=1)
         )
+
         return ResolutionResult(
             status="clarification",
             query=query,
@@ -239,6 +338,8 @@ Never invent an ID.
         query: ReservationQuery,
         message: str,
     ) -> ResolutionResult:
+        """Return a controlled not-found result."""
+
         return ResolutionResult(
             status="not_found",
             query=query,

@@ -1,17 +1,38 @@
 from __future__ import annotations
 
 from app.analytics.sql_utils import sql_string
-from app.core.models import CampaignContext, EntityCandidate, ReservationQuery
+from app.core.models import (
+    CampaignContext,
+    EntityCandidate,
+    ReservationQuery,
+)
 from app.data.backend import QueryBackend
 
 
 class DimensionRepository:
-    """Read governed candidates from dimension tables."""
+    """
+    Read governed business data from dimension tables.
 
-    def __init__(self, backend: QueryBackend):
+    This class does NOT decide which entity is correct.
+
+    It only returns:
+        - country candidates
+        - product candidates
+        - campaign candidates
+        - final CampaignContext
+    """
+
+    def __init__(
+        self,
+        backend: QueryBackend,
+    ):
         self.backend = backend
 
-    def list_countries(self) -> list[EntityCandidate]:
+    def list_countries(
+        self,
+    ) -> list[EntityCandidate]:
+        """Return active country candidates from dim_site_df."""
+
         rows = self.backend.execute(
             """
             SELECT
@@ -23,9 +44,17 @@ class DimensionRepository:
             ORDER BY fcountry_code
             """.strip()
         )
-        return [EntityCandidate(**row) for row in rows]
 
-    def list_products(self) -> list[EntityCandidate]:
+        return [
+            EntityCandidate(**row)
+            for row in rows
+        ]
+
+    def list_products(
+        self,
+    ) -> list[EntityCandidate]:
+        """Return active product candidates from dim_product_df."""
+
         rows = self.backend.execute(
             """
             SELECT
@@ -37,27 +66,57 @@ class DimensionRepository:
             ORDER BY fproduct_id
             """.strip()
         )
-        return [EntityCandidate(**row) for row in rows]
 
-    def list_campaigns(self, query: ReservationQuery) -> list[EntityCandidate]:
+        return [
+            EntityCandidate(**row)
+            for row in rows
+        ]
+
+    def list_campaigns(
+        self,
+        query: ReservationQuery,
+    ) -> list[EntityCandidate]:
+        """
+        Return campaign candidates.
+
+        Use already-resolved context to reduce the candidate set:
+            country
+            product, if supplied
+            year
+            month
+        """
+
         filters = ["1=1"]
 
+        # Country filter
         if query.country_code:
             filters.append(
-                f"lower(c.fcountry_code) = lower({sql_string(query.country_code)})"
+                "lower(c.fcountry_code) = lower("
+                f"{sql_string(query.country_code)})"
             )
+
+        # Product is optional.
         if query.product_id:
-            filters.append(f"c.fproduct_id = {sql_string(query.product_id)}")
+            filters.append(
+                f"c.fproduct_id = {sql_string(query.product_id)}"
+            )
+
+        # Optional time filters
         if query.campaign_year:
             filters.append(
-                f"substr(c.fstart_time, 1, 4) = {sql_string(str(query.campaign_year))}"
+                "substr(c.fstart_time, 1, 4) = "
+                f"{sql_string(str(query.campaign_year))}"
             )
+
         if query.campaign_month:
             month = f"{query.campaign_month:02d}"
-            filters.append(f"substr(c.fstart_time, 6, 2) = {sql_string(month)}")
 
-        rows = self.backend.execute(
-            f"""
+            filters.append(
+                "substr(c.fstart_time, 6, 2) = "
+                f"{sql_string(month)}"
+            )
+
+        sql = f"""
             SELECT DISTINCT
                 c.fcampaign_id AS entity_id,
                 c.fcampaign_name AS name,
@@ -71,9 +130,14 @@ class DimensionRepository:
               ON c.fcountry_code = s.fcountry_code
             WHERE {' AND '.join(filters)}
             ORDER BY c.fcampaign_id
-            """.strip()
-        )
-        return [EntityCandidate(**row) for row in rows]
+        """.strip()
+
+        rows = self.backend.execute(sql)
+
+        return [
+            EntityCandidate(**row)
+            for row in rows
+        ]
 
     def get_context(
         self,
@@ -81,18 +145,31 @@ class DimensionRepository:
         country_code: str | None,
         product_id: str | None,
     ) -> CampaignContext | None:
+        """
+        Build the final stable CampaignContext.
+
+        Product remains optional.
+        If product_id is None, analytics will cover all products
+        inside the selected campaign.
+        """
+
         filters = [
-            f"lower(c.fcampaign_id) = lower({sql_string(campaign_id)})"
+            "lower(c.fcampaign_id) = lower("
+            f"{sql_string(campaign_id)})"
         ]
+
         if country_code:
             filters.append(
-                f"lower(c.fcountry_code) = lower({sql_string(country_code)})"
+                "lower(c.fcountry_code) = lower("
+                f"{sql_string(country_code)})"
             )
-        if product_id:
-            filters.append(f"c.fproduct_id = {sql_string(product_id)}")
 
-        rows = self.backend.execute(
-            f"""
+        if product_id:
+            filters.append(
+                f"c.fproduct_id = {sql_string(product_id)}"
+            )
+
+        sql = f"""
             SELECT DISTINCT
                 c.fcampaign_id AS campaign_id,
                 c.fcampaign_name AS campaign_name,
@@ -103,24 +180,37 @@ class DimensionRepository:
               ON c.fcountry_code = s.fcountry_code
             WHERE {' AND '.join(filters)}
             LIMIT 2
-            """.strip()
-        )
+        """.strip()
+
+        rows = self.backend.execute(sql)
+
+        # More than one row means country context is still ambiguous.
         if len(rows) != 1:
             return None
 
-        context = CampaignContext(**rows[0])
+        context = CampaignContext(
+            **rows[0]
+        )
 
+        # Only fetch product metadata when the user supplied a product.
         if product_id:
             product_rows = self.backend.execute(
                 f"""
-                SELECT fproduct_id AS product_id, fproduct_name AS product_name
+                SELECT
+                    fproduct_id AS product_id,
+                    fproduct_name AS product_name
                 FROM dim_product_df
                 WHERE fproduct_id = {sql_string(product_id)}
                 LIMIT 1
                 """.strip()
             )
+
             if product_rows:
-                context.product_id = product_rows[0]["product_id"]
-                context.product_name = product_rows[0]["product_name"]
+                context.product_id = (
+                    product_rows[0]["product_id"]
+                )
+                context.product_name = (
+                    product_rows[0]["product_name"]
+                )
 
         return context
