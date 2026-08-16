@@ -52,13 +52,37 @@ class AnalyticsService:
         return f"{len(rows)} detail records. fuser_id_hash: {hashes or 'none'}."
 
     @staticmethod
-    def _where(context: CampaignContext) -> str:
+    def _where(
+            context: CampaignContext,
+    ) -> str:
+        """
+        Build analytics SQL filters.
+
+        Always:
+            campaign_id
+
+        Optional:
+            country_code
+            product_id
+        """
+
+        # Campaign is always required.
         filters = [
-            f"fcampaign_id = {sql_string(context.campaign_id)}",
-            f"fcountry_code = {sql_string(context.country_code)}",
+            f"fcampaign_id = {sql_string(context.campaign_id)}"
         ]
+
+        # Add country only when the user specified one.
+        if context.country_code:
+            filters.append(
+                f"fcountry_code = {sql_string(context.country_code)}"
+            )
+
+        # Add product only when the user specified one.
         if context.product_id:
-            filters.append(f"fproduct_id = {sql_string(context.product_id)}")
+            filters.append(
+                f"fproduct_id = {sql_string(context.product_id)}"
+            )
+
         return " AND ".join(filters)
 
     @staticmethod

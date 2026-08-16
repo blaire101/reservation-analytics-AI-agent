@@ -149,30 +149,35 @@ class DimensionRepository:
         ]
 
     def get_context(
-        self,
-        campaign_id: str,
-        country_code: str | None,
-        product_id: str | None,
+            self,
+            campaign_id: str,
+            country_code: str | None,
+            product_id: str | None,
     ) -> CampaignContext | None:
         """
-        Build the final stable CampaignContext.
+        Build the final CampaignContext.
 
-        Product remains optional.
-        If product_id is None, analytics will cover all products
-        inside the selected campaign.
+        Rules:
+        - Campaign is the main entity and must already be resolved.
+        - Country is optional.
+        - Product is optional.
+        - If country/product is not supplied, do not force a filter.
         """
 
+        # Always identify the campaign.
         filters = [
             "lower(c.fcampaign_id) = lower("
             f"{sql_string(campaign_id)})"
         ]
 
+        # Optional country filter.
         if country_code:
             filters.append(
                 "lower(c.fcountry_code) = lower("
                 f"{sql_string(country_code)})"
             )
 
+        # Optional product filter.
         if product_id:
             filters.append(
                 f"c.fproduct_id = {sql_string(product_id)}"
@@ -181,27 +186,44 @@ class DimensionRepository:
         sql = f"""
             SELECT DISTINCT
                 c.fcampaign_id AS campaign_id,
-                c.fcampaign_name AS campaign_name,
-                c.fcountry_code AS country_code,
-                s.fcountry_name AS country_name
+                c.fcampaign_name AS campaign_name
             FROM dim_campaign_df c
-            JOIN dim_site_df s
-              ON c.fcountry_code = s.fcountry_code
             WHERE {' AND '.join(filters)}
             LIMIT 2
         """.strip()
 
         rows = self.backend.execute(sql)
 
-        # More than one row means country context is still ambiguous.
-        if len(rows) != 1:
+        # Campaign/filter combination must exist.
+        if not rows:
             return None
 
+        # Campaign ID is already the stable main entity.
         context = CampaignContext(
-            **rows[0]
+            campaign_id=rows[0]["campaign_id"],
+            campaign_name=rows[0]["campaign_name"],
         )
 
-        # Only fetch product metadata when the user supplied a product.
+        # Add country metadata only when country was supplied.
+        if country_code:
+            country_rows = self.backend.execute(
+                f"""
+                SELECT
+                    fcountry_code AS country_code,
+                    fcountry_name AS country_name
+                FROM dim_site_df
+                WHERE lower(fcountry_code) = lower(
+                    {sql_string(country_code)}
+                )
+                LIMIT 1
+                """.strip()
+            )
+
+            if country_rows:
+                context.country_code = country_rows[0]["country_code"]
+                context.country_name = country_rows[0]["country_name"]
+
+        # Add product metadata only when product was supplied.
         if product_id:
             product_rows = self.backend.execute(
                 f"""
@@ -215,11 +237,7 @@ class DimensionRepository:
             )
 
             if product_rows:
-                context.product_id = (
-                    product_rows[0]["product_id"]
-                )
-                context.product_name = (
-                    product_rows[0]["product_name"]
-                )
+                context.product_id = product_rows[0]["product_id"]
+                context.product_name = product_rows[0]["product_name"]
 
         return context

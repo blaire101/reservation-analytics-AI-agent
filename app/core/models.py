@@ -129,19 +129,20 @@ class MatchDecision(BaseModel):
 
 class CampaignContext(BaseModel):
     """
-    Stable IDs used by AnalyticsService.
+    Final stable scope used by analytics.
 
-    Product is optional:
-        product_id=None
-        → aggregate all products in the campaign.
+    Campaign is the main entity.
+    Country and Product are optional filters.
     """
 
     campaign_id: str
     campaign_name: str
 
-    country_code: str
-    country_name: str
+    # Optional: filter analytics to one country.
+    country_code: str | None = None
+    country_name: str | None = None
 
+    # Optional: filter analytics to one product.
     product_id: str | None = None
     product_name: str | None = None
 
