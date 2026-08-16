@@ -12,10 +12,7 @@ class AnalyticsService:
         self.backend = backend
 
     def run(
-        self,
-        metric: str,
-        context: CampaignContext,
-        detail_requested: bool = False,
+        self, metric: str, context: CampaignContext, detail_requested: bool = False,
     ) -> str:
         if detail_requested and metric == "reserved_not_ordered":
             return self._details(context)
