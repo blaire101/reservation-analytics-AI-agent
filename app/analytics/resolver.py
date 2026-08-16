@@ -57,7 +57,7 @@ class CampaignResolver:
         country_result = self._resolve_optional(
             query=query,
             entity_type="country",
-            mention=query.country_code or query.country,
+            mention=query.country_code or query.country,  # None or "Germany"
             candidates=self.repo.list_countries(),
         )
         if country_result:
@@ -272,11 +272,11 @@ Rules:
             return candidates_by_id[decision.selected_id]
 
         # Ambiguous match.
-        plausible_candidates = [
-            candidates_by_id[candidate_id]
-            for candidate_id in decision.candidate_ids
-            if candidate_id in candidates_by_id
-        ]
+        plausible_candidates = []
+        for candidate_id in decision.candidate_ids:
+            if candidate_id in candidates_by_id:
+                candidate = candidates_by_id[candidate_id]
+                plausible_candidates.append(candidate)
 
         if plausible_candidates:
             return self._clarify(
