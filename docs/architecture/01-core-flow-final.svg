@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+<defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L0,8 L9,4 z" fill="#64748b"/></marker></defs>
+<rect width="1600" height="900" fill="#f8fafc"/>
+<text x="80" y="80" font-family="Arial" font-size="44" font-weight="700" fill="#0f172a">Reservation Analytics AI Agent - Core Flow</text>
+<text x="80" y="125" font-family="Arial" font-size="24" fill="#64748b">Two controlled answer paths on top of a trusted Reservation Data Mart</text>
+<g><rect x="560" y="180" width="480" height="90" rx="18" fill="#fff" stroke="#cbd5e1" stroke-width="2"/><text x="800" y="235" text-anchor="middle" font-family="Arial" font-size="28" font-weight="700" fill="#0f172a">User Question</text></g>
+<line x1="800" y1="270" x2="800" y2="330" stroke="#64748b" stroke-width="4" marker-end="url(#a)"/>
+<g><rect x="500" y="340" width="600" height="110" rx="18" fill="#ede9fe" stroke="#c4b5fd" stroke-width="2"/><text x="800" y="392" text-anchor="middle" font-family="Arial" font-size="28" font-weight="700" fill="#6d28d9">LLM Structured Business Plan</text><text x="800" y="426" text-anchor="middle" font-family="Arial" font-size="20" fill="#64748b">intent + metric + campaign + product + country</text></g>
+<line x1="800" y1="450" x2="800" y2="510" stroke="#64748b" stroke-width="4" marker-end="url(#a)"/>
+<g><rect x="550" y="520" width="500" height="90" rx="18" fill="#dbeafe" stroke="#93c5fd" stroke-width="2"/><text x="800" y="575" text-anchor="middle" font-family="Arial" font-size="28" font-weight="700" fill="#1d4ed8">LangGraph Router</text></g>
+<line x1="680" y1="610" x2="390" y2="690" stroke="#64748b" stroke-width="4" marker-end="url(#a)"/>
+<line x1="920" y1="610" x2="1210" y2="690" stroke="#64748b" stroke-width="4" marker-end="url(#a)"/>
+<g><rect x="120" y="700" width="520" height="120" rx="18" fill="#d1fae5" stroke="#86efac" stroke-width="2"/><text x="380" y="750" text-anchor="middle" font-family="Arial" font-size="30" font-weight="700" fill="#047857">Knowledge RAG</text><text x="380" y="790" text-anchor="middle" font-family="Arial" font-size="20" fill="#475569">definitions, rules, Data Mart knowledge</text></g>
+<g><rect x="960" y="700" width="520" height="120" rx="18" fill="#fef3c7" stroke="#fcd34d" stroke-width="2"/><text x="1220" y="750" text-anchor="middle" font-family="Arial" font-size="30" font-weight="700" fill="#b45309">Analytics</text><text x="1220" y="790" text-anchor="middle" font-family="Arial" font-size="20" fill="#475569">Validate / Resolve → Controlled SQL → Data Mart</text></g>
+<text x="800" y="870" text-anchor="middle" font-family="Arial" font-size="22" font-weight="700" fill="#2563eb">LLM understands intent. Application code controls IDs, routing and final SQL.</text>
+</svg>

@@ -7,7 +7,7 @@ The project keeps environment behavior separate from secrets.
 | File | Purpose |
 |---|---|
 | `local.env` | Default SQLite learning mode |
-| `aws.env` | Athena backend |
+| `aws.env` | remote query backend |
 | `internal.env` | Internal SQL Gateway backend |
 
 ## Common Keys
@@ -28,7 +28,7 @@ Backend-specific keys:
 
 ```text
 SQLite:      SQLITE_PATH
-Athena:      ATHENA_WORKGROUP, ATHENA_OUTPUT_LOCATION
+Remote query backend: provider-specific settings
 SQL Gateway: SQL_GATEWAY_ENDPOINT
 ```
 

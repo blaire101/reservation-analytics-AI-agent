@@ -1,3 +1,18 @@
-# End-to-End Architecture
+# End-to-End Architecture — Simplified
 
-A vertical overview of request entry, LangGraph routing, Knowledge RAG, controlled analytics, and backend data access.
+```text
+User / Feishu
+  ↓
+FastAPI
+  ↓
+LLM Structured Business Plan
+  ↓
+LangGraph Router
+  ├─ Knowledge → RAG → FAISS → Grounded Answer
+  └─ Analytics → Validate / Resolve → Controlled SQL → QueryBackend → Data Mart → Answer
+```
+
+Resolution rule:
+- stable ID → exact validation
+- natural-language name → resolve only when needed
+- ambiguous → return governed choices; never guess

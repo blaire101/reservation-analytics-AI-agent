@@ -69,7 +69,7 @@ This is especially important before:
 File:
 
 ```text
-app/core/models.py
+app/analytics/models/request.py
 ```
 
 Main models:

@@ -43,7 +43,7 @@ After finishing this notebook you should understand:
 Current code:
 
 ```text
-app/knowledge/rag.py
+app/rag/service.py
 ```
 
 Knowledge sources:

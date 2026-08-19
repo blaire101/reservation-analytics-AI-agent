@@ -1,79 +1,53 @@
-from uuid import uuid4
+"""FastAPI application entry point.
+
+This file connects the main application pieces:
+
+    Settings -> QueryBackend -> ReservationAgent -> FastAPI routes
+
+The agent is created lazily and reused across API requests so the RAG index and
+other dependencies do not need to be rebuilt for every question.
+"""
 
 from fastapi import FastAPI
-from pydantic import BaseModel, Field
 
-from app.core.graph import ReservationAgent
-from app.data.backend import create_backend
+from app.analytics.query.backend import create_backend
+from app.api.routes import build_router
+from app.graph.workflow import ReservationAgent
 from app.settings import load_settings
 
-
+# Load configuration once when the application starts.
 settings = load_settings()
-app = FastAPI(title="Reservation Analytics AI Agent")
-_agent: ReservationAgent | None = None
+
+# Create the FastAPI application object used by Uvicorn.
+app = FastAPI(title='Reservation Analytics AI Agent')
+
+# The agent is created on the first request and then reused.
+_agent = None
 
 
-class AskRequest(BaseModel):
-    question: str = Field(min_length=1)
-    session_id: str | None = None
+def get_agent():
+    """Create and cache the ReservationAgent used by API requests.
 
+    Returns:
+        A ready-to-use ``ReservationAgent`` connected to the configured query
+        backend.
 
-class AskResponse(BaseModel):
-    answer: str
-    route: str
-    status: str
-    session_id: str
-    pending_entity: str = ""
-    candidates: list[dict] = Field(default_factory=list)
-
-
-def get_agent() -> ReservationAgent:
-    """Create the Agent once; LLM is a required dependency."""
-
+    Flow:
+        Settings
+            -> create_backend()
+            -> ReservationAgent
+            -> cached in _agent
+    """
     global _agent
+
+    # Lazy initialization avoids constructing the LLM/RAG stack before it is
+    # actually needed.
     if _agent is None:
-        _agent = ReservationAgent(
-            settings,
-            create_backend(settings),
-        )
+        backend = create_backend(settings)
+        _agent = ReservationAgent(settings, backend)
+
     return _agent
 
 
-@app.get("/health")
-def health() -> dict:
-    return {
-        "status": "ok",
-        "backend": settings.backend,
-        "llm_configured": bool(settings.openai_api_key),
-    }
-
-
-@app.post("/ask", response_model=AskResponse)
-def ask(request: AskRequest) -> dict:
-    """Run one message; reuse session_id for clarification replies."""
-
-    session_id = request.session_id or f"api-{uuid4().hex}"
-
-    try:
-        result = get_agent().invoke(
-            request.question,
-            session_id=session_id,
-        )
-    except RuntimeError as exc:
-        return {
-            "answer": str(exc),
-            "route": "",
-            "status": "unavailable",
-            "session_id": session_id,
-            "pending_entity": "",
-            "candidates": [],
-        }
-
-    return {
-        "answer": result.get("answer", ""),
-        "route": result.get("route", ""),
-        "status": result.get("status", ""),
-        "session_id": session_id,
-        "pending_entity": result.get("pending_entity", ""),
-        "candidates": result.get("candidates", []),
-    }
+# Register /health and /ask endpoints.
+app.include_router(build_router(get_agent))

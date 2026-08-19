@@ -1,39 +1,16 @@
-# Part 1 — Core AI
+# Core AI
 
-![Core AI](architecture/02-core-ai.png)
-
-## Goal
-
-Understand how a natural-language request becomes structured business context and then moves through LangGraph.
-
-## Read in This Order
+The LLM has one simple job: convert natural language into a typed **business plan**.
 
 ```text
-app/core/models.py
-      ↓
-app/core/extractor.py
-      ↓
-app/core/graph.py
+question → intent + metric + business fields
 ```
 
-## Concepts
-
-- **Pydantic Structured Output** converts free text into `ReservationQuery`.
-- **LangGraph State** stores the request as it moves between nodes.
-- **Conditional edges** route Knowledge questions to RAG and Analytics questions to validation.
-- Missing business context produces clarification instead of guessed values.
-
-## Keep This Mental Model
+LangGraph then routes the plan:
 
 ```text
-Question → Extract → Route
-                    ├─ Knowledge
-                    └─ Analytics
+extract → knowledge
+       ↘ validate → resolve → analytics
 ```
 
-The graph does not contain SQL implementation or FAISS implementation. It only coordinates them.
-
-
-## Stateful clarification
-
-`ReservationAgent.invoke(question, session_id=...)` keeps clarification context for the session. When entity resolution is ambiguous, the state stores `pending_entity` and the governed candidate list. The user's next message is matched only against those candidates, then the workflow resumes with the confirmed stable ID. This is a lightweight prototype memory loop; a production deployment can replace the in-process store with durable checkpoint storage.
+Important boundary: **LLM interprets language; application code controls IDs and SQL.**

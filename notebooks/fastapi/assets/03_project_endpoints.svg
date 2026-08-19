@@ -13,7 +13,7 @@
 <g filter="url(#shadow)">
 <rect x="70" y="200" width="250" height="110" rx="16" fill="#ffffff" stroke="#1f5ca8" stroke-width="2"/>
 <text x="195.0" y="238" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#0b1736">Client / Feishu</text>
-<text x="195.0" y="268" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#5f6d80">question + session_id</text>
+<text x="195.0" y="268" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#5f6d80">question</text>
 </g><g filter="url(#shadow)">
 <rect x="420" y="200" width="250" height="110" rx="16" fill="#ffffff" stroke="#16805b" stroke-width="2"/>
 <text x="545.0" y="238" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#0b1736">POST /ask</text>
@@ -21,9 +21,9 @@
 </g><g filter="url(#shadow)">
 <rect x="770" y="200" width="250" height="110" rx="16" fill="#ffffff" stroke="#7c3aed" stroke-width="2"/>
 <text x="895.0" y="238" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#0b1736">ReservationAgent</text>
-<text x="895.0" y="268" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#5f6d80">invoke(question, session_id)</text>
+<text x="895.0" y="268" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#5f6d80">invoke(question)</text>
 </g><g filter="url(#shadow)">
 <rect x="420" y="390" width="250" height="105" rx="16" fill="#ffffff" stroke="#d97706" stroke-width="2"/>
 <text x="545.0" y="428" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#0b1736">Response JSON</text>
-<text x="545.0" y="458" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#5f6d80">answer · status · session_id</text>
-</g><line x1="320" y1="255" x2="420" y2="255" stroke="#1f5ca8" stroke-width="3" marker-end="url(#arrow)"/><line x1="670" y1="255" x2="770" y2="255" stroke="#1f5ca8" stroke-width="3" marker-end="url(#arrow)"/><line x1="895" y1="310" x2="895" y2="440" stroke="#1f5ca8" stroke-width="3" marker-end="url(#arrow)"/><line x1="895" y1="440" x2="670" y2="440" stroke="#1f5ca8" stroke-width="3" marker-end="url(#arrow)"/><text x="600.0" y="585" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#334155">If session_id is omitted, the API creates one and returns it for follow-up clarification.</text></svg>
+<text x="545.0" y="458" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#5f6d80">answer · route · status · candidates</text>
+</g><line x1="320" y1="255" x2="420" y2="255" stroke="#1f5ca8" stroke-width="3" marker-end="url(#arrow)"/><line x1="670" y1="255" x2="770" y2="255" stroke="#1f5ca8" stroke-width="3" marker-end="url(#arrow)"/><line x1="895" y1="310" x2="895" y2="440" stroke="#1f5ca8" stroke-width="3" marker-end="url(#arrow)"/><line x1="895" y1="440" x2="670" y2="440" stroke="#1f5ca8" stroke-width="3" marker-end="url(#arrow)"/><text x="600.0" y="585" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#334155">Clear requests run directly; ambiguous names return governed candidate IDs.</text></svg>

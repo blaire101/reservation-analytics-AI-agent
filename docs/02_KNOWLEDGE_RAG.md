@@ -12,23 +12,21 @@ Answer metric-definition and data-model questions from controlled Markdown knowl
 knowledge/kg_reservation_metrics.md
 knowledge/kg_data_model.md
         ↓
-app/knowledge/rag.py
+app/rag/ingestion/loader.py
+        ↓
+app/rag/embeddings/embedder.py
+        ↓
+app/rag/vectorstore/faiss_store.py
+        ↓
+app/rag/retrieval/retriever.py
+        ↓
+app/rag/service.py
 ```
 
 ## Flow
 
 ```text
-Markdown Knowledge
-↓
-LlamaIndex
-↓
-Embeddings
-↓
-FAISS
-↓
-Retriever
-↓
-Grounded Answer
+Markdown Knowledge → chunks → embeddings → FAISS → Top-K → grounded answer
 ```
 
-`rag.py` loads all `.md` files from `knowledge/`. Local mode uses a deterministic fallback; `OPENAI_API_KEY configured` activates the complete RAG path.
+RAG answers knowledge questions only. Actual business numbers come from the controlled analytics path.

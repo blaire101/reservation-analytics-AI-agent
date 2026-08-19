@@ -69,7 +69,7 @@ Agents & Tools
 Current code:
 
 ```text
-app/core/extractor.py
+app/graph/nodes/extract.py
 ```
 
 Responsibility:
@@ -257,7 +257,7 @@ The LLM does not get unrestricted database-tool access.
 
 ### Q1. Does this project use LangChain?
 
-Yes. `app/core/extractor.py` uses `langchain_openai.ChatOpenAI` and `with_structured_output()`.
+Yes. `app/graph/nodes/extract.py` uses `langchain_openai.ChatOpenAI` and `with_structured_output()`.
 
 ### Q2. Why did you not build the whole project with LangChain?
 

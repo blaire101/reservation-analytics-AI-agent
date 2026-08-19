@@ -1,65 +1,14 @@
 # Code Walkthrough
 
-## The four files to understand first
+Read these packages in order:
 
-```text
-app/core/graph.py
-app/core/extractor.py
-app/analytics/resolver.py
-app/analytics/service.py
-```
+1. `app/graph/workflow.py` — the whole flow on one page.
+2. `app/graph/nodes/extract.py` — LLM → typed business plan.
+3. `app/analytics/validation/validator.py` — lightweight validation.
+4. `app/analytics/resolution/` — stable ID exact check; name lookup only when needed.
+5. `app/analytics/metrics/` — allowlisted business metric SQL.
+6. `app/analytics/service.py` — execute and format the result.
+7. `app/rag/` — loading, embedding, FAISS, retrieval.
+8. `app/api/` — thin FastAPI interface.
 
-### `graph.py`
-Owns workflow only:
-
-```text
-extract -> knowledge
-       or
-extract -> validate -> resolve -> analytics
-```
-
-It also checks whether the same `session_id` is waiting for clarification.
-
-### `extractor.py`
-Owns language understanding only:
-
-```text
-question -> intent + metric + ReservationQuery
-```
-
-It does not decide warehouse IDs.
-
-### `resolver.py`
-Owns business-context orchestration only:
-
-```text
-country if supplied
--> product if supplied
--> campaign
--> final stable IDs
-```
-
-Candidate SQL is in `repository.py`. Matching logic is in `resolver.py`.
-
-### `service.py`
-Owns controlled analytics only:
-
-```text
-resolved Campaign
--> predefined aggregate/detail SQL
--> formatted answer
-```
-
-## Why product is optional
-
-A campaign row already contains `fproduct_id` and `fcountry_code`.
-
-Therefore this request is valid:
-
-```text
-Germany + campaign name + reserved_users
-```
-
-The resolver can find the campaign and then derive the product from that governed row.
-
-Product is still useful when the user supplies it because it narrows the campaign candidate set.
+The modules are deliberately small so each one is easy to explain step by step.

@@ -1,87 +1,16 @@
-# Multilingual Entity Resolution & Stateful Clarification
+# Entity Resolution — Simplified Quick Review Version
 
-## Responsibility split
-
-```text
-extractor.py
-    ↓ natural-language entities
-repository.py
-    ↓ governed candidates
-resolver.py
-    ↓ resolved / ambiguous / not_found
-resolver.py
-    ↓ final Campaign + Product + Country IDs
-graph.py
-    ↓ clarification memory when needed
-service.py
-    ↓ controlled analytics SQL
-```
-
-## Why this layer exists
-
-Users do not always use warehouse-standard names. The application therefore separates semantic understanding from stable ID resolution.
+The resolver follows one easy rule:
 
 ```text
-Natural-language question
-        ↓
-Structured Extraction
-        ↓
-Governed Dimension Candidates
-  ├─ dim_site_df
-  ├─ dim_product_df
-  └─ dim_campaign_df
-        ↓
-Conservative Candidate Selection
-   ├─ one clear match → stable ID
-   ├─ multiple matches → clarification
-   └─ no match → not_found
-        ↓
-Controlled Analytics SQL
+Stable ID supplied → exact dimension-table validation → continue
+Natural-language name → lookup governed dimensions → one match continue / many matches clarify
 ```
 
-## Product is optional input
+Examples:
 
-A campaign row already owns `fproduct_id` and `fcountry_code`.
+- `CMP001` → validate `fcampaign_id = 'CMP001'`; do not ask the LLM to choose it again.
+- `Germany` → resolve to `DE` from `dim_site_df`.
+- `Phone Mi 17 Pro` → resolve to `P001` from `dim_product_df`.
 
-Therefore this request can be resolved:
-
-```text
-Germany + campaign name + reserved_users
-```
-
-The resolver uses country as an optional filter, resolves the campaign, then derives the final product and country IDs from the selected campaign row.
-
-If the user also supplies product, product is resolved first and used to narrow campaign candidates.
-
-## Safety rule
-
-The LLM may compare user wording with governed candidates, but it may select only IDs returned from those dimensions. It does not invent `country_code`, `product_id`, or `campaign_id`.
-
-## Clarification loop
-
-When several candidates remain plausible, the API returns:
-
-- `status = clarification`
-- `pending_entity`
-- governed candidate list
-- the same `session_id`
-
-The next message with the same `session_id` is treated as a clarification answer.
-
-```text
-Candidate ambiguity
-   ↓
-Ask user
-   ↓
-session_id memory
-   ↓
-User confirms
-   ↓
-resolver.confirm()
-   ↓
-normal resolver flow continues
-   ↓
-Stable IDs
-```
-
-The current project uses in-process Python memory. That is enough for a single-process demonstration and keeps the implementation easy to read.
+If multiple governed candidates remain, the service returns their IDs and asks the user to retry with one ID. The simple demo deliberately avoids a session-memory confirmation loop.

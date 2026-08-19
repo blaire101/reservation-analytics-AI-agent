@@ -1,10 +1,10 @@
 # Serving and Data Backends
 
-FastAPI serves the agent. `QueryBackend` keeps SQLite, Athena, and SQL Gateway separate from agent logic.
+FastAPI serves the agent. `QueryBackend` keeps SQLite, remote query backend, and SQL Gateway separate from agent logic.
 
 ```text
 config/local.env     → SQLite
-config/aws.env       → Athena
+config/aws.env       → remote query backend
 config/internal.env  → SQL Gateway
 ```
 

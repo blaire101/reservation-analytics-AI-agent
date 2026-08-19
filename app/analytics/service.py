@@ -1,14 +1,25 @@
+"""Trusted analytics service that owns allowlisted metric execution.
+
+Important boundary:
+    The LLM decides *what the user wants*.
+    This service decides *how trusted data is queried*.
+
+The LLM never writes the final SQL.
+"""
+
 from __future__ import annotations
 
-from app.analytics.sql_utils import sql_string
-from app.core.models import CampaignContext
-from app.data.backend import QueryBackend
+from app.analytics.metrics.registry import ALLOWED_METRICS
+from app.analytics.metrics.reservation import details_sql, summary_sql
+from app.analytics.models.context import CampaignContext
+from app.analytics.query.backend import QueryBackend
 
 
 class AnalyticsService:
-    """Run allowlisted metrics against the trusted Data Mart."""
+    """Execute controlled reservation metrics against a trusted Data Mart."""
 
     def __init__(self, backend: QueryBackend):
+        """Store the backend used to run application-controlled SQL."""
         self.backend = backend
 
     def run(
@@ -17,99 +28,78 @@ class AnalyticsService:
         context: CampaignContext,
         detail_requested: bool = False,
     ) -> str:
-        if detail_requested and metric == "reserved_not_ordered":
-            return self._details(context)
+        """Execute one allowlisted metric and format a business-friendly answer.
 
-        summary = self._summary(context)
-        return self._format(metric, context, summary)
+        Args:
+            metric: Allowlisted metric selected by structured output.
+            context: Stable campaign/country/product IDs from entity resolution.
+            detail_requested: Whether the caller wants reserved-not-ordered
+                detail records instead of only an aggregate number.
 
-    def _summary(self, context: CampaignContext) -> dict[str, int]:
-        rows = self.backend.execute(
-            f"""
-            SELECT
-                COUNT(DISTINCT CASE WHEN freserve_flag = 1 THEN fuser_id END) AS reserved,
-                COUNT(DISTINCT CASE WHEN forder_flag = 1 THEN fuser_id END) AS ordered,
-                COUNT(DISTINCT CASE WHEN ftag_reserved_not_paid = 1 THEN fuser_id END) AS not_ordered
-            FROM dm_reservation_subject_df
-            WHERE {self._where(context)}
-            """.strip()
-        )
+        Returns:
+            Human-readable trusted analytics answer.
+
+        Flow:
+            metric + stable context
+                -> choose controlled SQL
+                -> QueryBackend.execute()
+                -> calculate/format metric
+                -> answer
+        """
+        # Defense in depth: never execute an unknown metric name.
+        if metric not in ALLOWED_METRICS:
+            raise ValueError(f'Unsupported metric: {metric}')
+
+        # ----- Detail path -----
+        # Only reserved_not_ordered exposes detail rows in this demo.
+        if detail_requested and metric == 'reserved_not_ordered':
+            rows = self.backend.execute(details_sql(context))
+
+            # Privacy: detail SQL returns hashed user identifiers only.
+            hashes = ', '.join(row['fuser_id_hash'] for row in rows)
+
+            return (
+                f'{len(rows)} detail records. '
+                f'fuser_id_hash: {hashes or "none"}.'
+            )
+
+        # ----- Aggregate path -----
+        # One controlled SQL query returns all base counts used by the metrics.
+        rows = self.backend.execute(summary_sql(context))
         row = rows[0] if rows else {}
-        return {k: int(row.get(k) or 0) for k in ("reserved", "ordered", "not_ordered")}
 
-    def _details(self, context: CampaignContext) -> str:
-        rows = self.backend.execute(
-            f"""
-            SELECT fuser_id_hash, fcampaign_id, fproduct_id, fcountry_code
-            FROM dm_reservation_subject_df
-            WHERE {self._where(context)}
-              AND ftag_reserved_not_paid = 1
-            ORDER BY fuser_id_hash
-            LIMIT 100
-            """.strip()
-        )
-        hashes = ", ".join(row["fuser_id_hash"] for row in rows)
-        return f"{len(rows)} detail records. fuser_id_hash: {hashes or 'none'}."
+        reserved = int(row.get('reserved') or 0)
+        ordered = int(row.get('ordered') or 0)
+        not_ordered = int(row.get('not_ordered') or 0)
 
-    @staticmethod
-    def _where(
-            context: CampaignContext,
-    ) -> str:
-        """
-        Build analytics SQL filters.
-
-        Always:
-            campaign_id
-
-        Optional:
-            country_code
-            product_id
-        """
-
-        # Campaign is always required.
-        filters = [
-            f"fcampaign_id = {sql_string(context.campaign_id)}"
-        ]
-
-        # Add country only when the user specified one.
-        if context.country_code:
-            filters.append(
-                f"fcountry_code = {sql_string(context.country_code)}"
-            )
-
-        # Add product only when the user specified one.
-        if context.product_id:
-            filters.append(
-                f"fproduct_id = {sql_string(context.product_id)}"
-            )
-
-        return " AND ".join(filters)
-
-    @staticmethod
-    def _format(
-        metric: str,
-        context: CampaignContext,
-        summary: dict[str, int],
-    ) -> str:
-        reserved = summary["reserved"]
-        ordered = summary["ordered"]
-        not_ordered = summary["not_ordered"]
+        # Avoid division by zero when a campaign has no reserved users.
         conversion = ordered / reserved * 100 if reserved else 0
 
-        scope = f"{context.campaign_id} — {context.campaign_name} ({context.country_name})"
+        # Build a readable scope using governed names/IDs.
+        scope = (
+            f'{context.campaign_id} — {context.campaign_name} '
+            f'({context.country_name})'
+        )
         if context.product_name:
-            scope += f", {context.product_name}"
+            scope += f', {context.product_name}'
 
+        # Map each allowlisted metric to its final business sentence.
         messages = {
-            "reserved_users": f"{reserved} reserved users.",
-            "ordered_users": f"{ordered} ordered users.",
-            "reserved_not_ordered": f"{not_ordered} users reserved but did not order.",
-            "conversion_rate": f"reservation-to-order conversion rate was {conversion:.2f}%.",
+            'reserved_users': f'{reserved} reserved users.',
+            'ordered_users': f'{ordered} ordered users.',
+            'reserved_not_ordered': (
+                f'{not_ordered} users reserved but did not order.'
+            ),
+            'conversion_rate': (
+                f'reservation-to-order conversion rate was {conversion:.2f}%.'
+            ),
         }
-        if metric in messages:
-            return f"{scope}: {messages[metric]}"
 
+        if metric in messages:
+            return f'{scope}: {messages[metric]}'
+
+        # ``summary`` returns all main reservation metrics together.
         return (
-            f"{scope}: {reserved} reserved, {ordered} ordered, "
-            f"{not_ordered} not ordered, {conversion:.2f}% conversion."
+            f'{scope}: {reserved} reserved, {ordered} ordered, '
+            f'{not_ordered} not ordered, {conversion:.2f}% conversion.'
         )
