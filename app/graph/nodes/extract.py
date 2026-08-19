@@ -52,7 +52,10 @@ Question: {question}
 
 
 def run(extractor, state):
-    """LangGraph node wrapper that stores extraction results in shared state."""
+    """
+        LangGraph node wrapper that stores extraction results in shared state.
+        state = LangGraph workflow
+    """
     request = extractor.extract(state['question'])
 
     # LangGraph state uses plain dictionaries, so convert the Pydantic query.
@@ -63,3 +66,42 @@ def run(extractor, state):
         'detail_requested': request.detail_requested,
         'query': request.query.model_dump(),
     }
+# {
+#     state = graph.state AgentState
+#
+#     "question": "How many users reserved CMP001 in Germany?",
+#     "resolved_context": {
+#         "campaign_id": "CMP001",
+#         "country_code": "DE"
+#     }
+#
+#     "intent": "analytics",
+#     "metric": "reserved_users",
+#     "detail_requested": False,
+#     "query": {
+#         "country": "Germany",
+#         "country_code": None,
+#
+#         "product": None,
+#         "product_id": None,
+#
+#         "campaign_name": None,
+#         "campaign_id": "CMP001",
+#
+#         "campaign_month": None,
+#         "campaign_year": None
+#     }
+# }
+
+# -----------------------------------
+
+# request.query = ReservationQuery(
+#     campaign_id="CMP001",
+#     campaign_name=None,
+#     country="Germany",
+#     country_code=None,
+#     product=None,
+#     product_id=None,
+#     campaign_month=None,
+#     campaign_year=None,
+# )
