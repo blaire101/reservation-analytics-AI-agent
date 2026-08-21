@@ -10,7 +10,7 @@
 - **FastAPI + Docker** serve and package the application.
 - **SQLite** supports local demos; remote query backends can be added through the QueryBackend interface.
 
-### 30-Second Mental Model
+### Mental Model
 
 ```text
 LangGraph routes the request.
